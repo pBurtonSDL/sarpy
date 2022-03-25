@@ -1,9 +1,9 @@
 """
-Definition for the DetailObjectInfo AFRL labeling object
+Definition for the ObjectInfo AFRL labeling object
 """
 
 __classification__ = "UNCLASSIFIED"
-__authors__ = ("Thomas McCullough", "Thomas Rackers")
+__authors__ = "Thomas McCullough"
 
 import logging
 from typing import Optional, List
@@ -28,6 +28,9 @@ from .blocks import RangeCrossRangeType, RowColDoubleType, LatLonEleType
 #       its current form, and should be replaced with a (`name`, `value`) pair.
 
 logger = logging.getLogger(__name__)
+
+_no_projection_text = 'This sicd does not permit projection,\n\t' \
+                      'so the image location can not be inferred'
 
 
 # the Object and sub-component definitions
@@ -121,7 +124,7 @@ class PlanePhysicalType(Serializable):
 class SizeType(Serializable, Arrayable):
     _fields = ('Length', 'Width', 'Height')
     _required = _fields
-    _numeric_format = {key: '0.17E' for key in _fields}
+    _numeric_format = {key: '0.17G' for key in _fields}
     # Descriptors
     Length = FloatDescriptor(
         'Length', _required, strict=True, docstring='The Length attribute.')  # type: float
@@ -202,7 +205,7 @@ class SizeType(Serializable, Arrayable):
 class OrientationType(Serializable):
     _fields = ('Roll', 'Pitch', 'Yaw', 'AzimuthAngle')
     _required = ()
-    _numeric_format = {key: '0.17E' for key in _fields}
+    _numeric_format = {key: '0.17G' for key in _fields}
     # descriptors
     Roll = FloatDescriptor(
         'Roll', _required)  # type: float
@@ -302,9 +305,7 @@ class ImageLocationType(Serializable):
             return None
 
         if not the_structure.can_project_coordinates():
-            logger.warning(
-                'This sicd does not permit projection,\n\t'
-                'so the image location can not be inferred')
+            logger.warning(_no_projection_text)
             return None
 
         # make sure this is defined, for the sake of efficiency
@@ -469,7 +470,7 @@ class GeoLocationType(Serializable):
 
     # noinspection PyUnusedLocal
     @classmethod
-    def from_image_location(cls, image_location, the_structure, projection_type='HAE', **kwargs):
+    def from_image_location(cls, image_location, the_structure, projection_type='HAE', **proj_kwargs):
         """
         Construct the geographical location from the image location via
         projection using the SICD model.
@@ -487,7 +488,7 @@ class GeoLocationType(Serializable):
             The projection type selector, one of `['PLANE', 'HAE', 'DEM']`. Using `'DEM'`
             requires configuration for the DEM pathway described in
             :func:`sarpy.geometry.point_projection.image_to_ground_dem`.
-        kwargs
+        proj_kwargs
             The keyword arguments for the :func:`SICDType.project_image_to_ground_geo` method.
 
         Returns
@@ -500,15 +501,11 @@ class GeoLocationType(Serializable):
             return None
 
         if not the_structure.can_project_coordinates():
-            logger.warning(
-                'This sicd does not permit projection,\n\t'
-                'so the image location can not be inferred')
+            logger.warning(_no_projection_text)
             return None
 
         # make sure this is defined, for the sake of efficiency
         the_structure.define_coa_projection(overide=False)
-
-        kwargs = {}
 
         if isinstance(the_structure, SICDType):
             image_shift = numpy.array(
@@ -516,12 +513,13 @@ class GeoLocationType(Serializable):
         else:
             image_shift = numpy.zeros((2, ), dtype='float64')
 
+        kwargs = {}
         for attribute in cls._fields:
             value = getattr(image_location, attribute)
             if value is not None:
                 coords = value.get_array(dtype='float64') + image_shift
                 geo_coords = the_structure.project_image_to_ground_geo(
-                    coords, ordering='latlong', projection_type=projection_type, **kwargs)
+                    coords, ordering='latlong', projection_type=projection_type, **proj_kwargs)
 
                 kwargs[attribute] = geo_coords
         out = GeoLocationType(**kwargs)
@@ -552,19 +550,19 @@ class GeoLocationType(Serializable):
 
 
 class FreeFormType(Serializable):
-    _fields = ('Name', 'Value')
+    _fields = ('Component', 'Value')
     _required = _fields
     Name = StringDescriptor(
-        'Name', _required)  # type: str
+        'Component', _required)  # type: str
     Value = StringDescriptor(
-        'Value', _required)  # type: str
+        'Component', _required)  # type: str
 
-    def __init__(self, Name=None, Value=None, **kwargs):
+    def __init__(self, Component=None, Value=None, **kwargs):
         """
 
         Parameters
         ----------
-        Name : str
+        Component : str
         Value : str
         kwargs
         """
@@ -573,7 +571,7 @@ class FreeFormType(Serializable):
             self._xml_ns = kwargs['_xml_ns']
         if '_xml_ns_key' in kwargs:
             self._xml_ns_key = kwargs['_xml_ns_key']
-        self.Name = Name
+        self.Component = Component
         self.Value = Value
         super(FreeFormType, self).__init__(**kwargs)
 
@@ -625,7 +623,7 @@ class CompoundCommentType(Serializable):
             value = []
             for element in node:
                 tag_name = element.tag[len(tag_start):]
-                value.append(FreeFormType(Name=tag_name, Value=element.text))
+                value.append(FreeFormType(Component=tag_name, Value=element.text))
             kwargs['Value'] = None
             kwargs['Comments'] = value
         return super(CompoundCommentType, cls).from_node(node, xml_ns, ns_key=ns_key, kwargs=kwargs)
@@ -638,7 +636,7 @@ class CompoundCommentType(Serializable):
             node = create_new_node(doc, the_tag, parent=parent)
             if self.Comments is not None:
                 for entry in self.Comments:
-                    child_tag = '{}:{}'.format(ns_key, entry.Name) if ns_key is not None else entry.Name
+                    child_tag = '{}:{}'.format(ns_key, entry.Name) if ns_key is not None else entry.Component
                     create_text_node(doc, child_tag, entry.Value, parent=node)
         return node
 
@@ -654,6 +652,7 @@ class TheObjectType(Serializable):
         'TargetToClutterRatio', 'VisualQualityMetric',
         'UnderlyingTerrain', 'OverlyingTerrain', 'TerrainTexture', 'SeasonalCover')
     _required = ('SystemName', 'ImageLocation', 'GeoLocation')
+    _numeric_format = {'ObscurationPercent': '0.17G', }
     # descriptors
     SystemName = StringDescriptor(
         'SystemName', _required, strict=DEFAULT_STRICT,
@@ -948,9 +947,7 @@ class TheObjectType(Serializable):
             return -1
 
         if not sicd.can_project_coordinates():
-            logger.warning(
-                'This sicd does not permit projection,\n\t'
-                'so the image location can not be inferred')
+            logger.warning(_no_projection_text)
             return -1
 
         # gets the prospective image location
@@ -986,7 +983,7 @@ class TheObjectType(Serializable):
         self.ImageLocation = image_location
         return placement
 
-    def set_geo_location_from_sicd(self, sicd, projection_type='HAE', **kwargs):
+    def set_geo_location_from_sicd(self, sicd, projection_type='HAE', **proj_kwargs):
         """
         Set the geographical location information with respect to the given SICD,
         assuming that the image coordinates are populated.
@@ -1003,7 +1000,7 @@ class TheObjectType(Serializable):
             The projection type selector, one of `['PLANE', 'HAE', 'DEM']`. Using `'DEM'`
             requires configuration for the DEM pathway described in
             :func:`sarpy.geometry.point_projection.image_to_ground_dem`.
-        kwargs
+        proj_kwargs
             The keyword arguments for the :func:`SICDType.project_image_to_ground_geo` method.
         """
 
@@ -1018,15 +1015,13 @@ class TheObjectType(Serializable):
             return
 
         if not sicd.can_project_coordinates():
-            logger.warning(
-                'This sicd does not permit projection,\n\t'
-                'so the geographical location can not be inferred')
+            logger.warning(_no_projection_text)
             return
 
         self.GeoLocation = GeoLocationType.from_image_location(
-            self.ImageLocation, sicd, projection_type=projection_type, **kwargs)
+            self.ImageLocation, sicd, projection_type=projection_type, **proj_kwargs)
 
-    def set_chip_details_from_sicd(self, sicd, layover_shift=False, populate_in_periphery=False, minimum_pad=5):
+    def set_chip_details_from_sicd(self, sicd, layover_shift=False, populate_in_periphery=False, padding_fraction=0.05, minimum_pad=0):
         """
         Set the chip information with respect to the given SICD, assuming that the
         image location and size are defined.
@@ -1043,6 +1038,8 @@ class TheObjectType(Serializable):
             space.
         populate_in_periphery : bool
             Should we populate for peripheral?
+        padding_fraction : None|float
+            Default fraction of box dimension by which to pad.
         minimum_pad : int|float
             The minimum number of pixels by which to pad for the chip definition
 
@@ -1111,8 +1108,11 @@ class TheObjectType(Serializable):
         max_cols = max(numpy.max(pixel_box[:, 1]), numpy.max(layover_box[:, 1]))
 
         # determine the padding amount
-        row_pad = max(minimum_pad, 0.3*(max_rows-min_rows))
-        col_pad = max(minimum_pad, 0.3*(max_cols-min_cols))
+        padding_fraction = 0.0 if padding_fraction is None else float(padding_fraction)
+        if padding_fraction < 0.0:
+            padding_fraction = 0.0
+        row_pad = max(minimum_pad, padding_fraction*(max_rows-min_rows))
+        col_pad = max(minimum_pad, padding_fraction*(max_cols-min_cols))
 
         # check our bounding information
         rows = sicd.ImageData.NumRows
@@ -1199,7 +1199,7 @@ class TheObjectType(Serializable):
         return image_geometry_object, geometry_properties
 
 
-# other types for the DetailObjectInfo
+# other types for the ObjectInfo
 
 class NominalType(Serializable):
     _fields = ('ChipSize', )
@@ -1253,7 +1253,7 @@ class PlaneNominalType(Serializable):
 
 # the main type
 
-class DetailObjectInfoType(Serializable):
+class ObjectInfoType(Serializable):
     _fields = (
         'NumberOfObjectsInImage', 'NumberOfObjectsInScene',
         'SlantPlane', 'GroundPlane', 'Objects')
@@ -1300,11 +1300,11 @@ class DetailObjectInfoType(Serializable):
         self.SlantPlane = SlantPlane
         self.GroundPlane = GroundPlane
         self.Objects = Objects
-        super(DetailObjectInfoType, self).__init__(**kwargs)
+        super(ObjectInfoType, self).__init__(**kwargs)
 
     def set_image_location_from_sicd(
             self, sicd, layover_shift=True, populate_in_periphery=False,
-            include_out_of_range=False, minimum_pad=20):
+            include_out_of_range=False, padding_fraction=0.05, minimum_pad=0):
         """
         Set the image location information with respect to the given SICD,
         assuming that the physical coordinates are populated. The `NumberOfObjectsInImage`
@@ -1319,6 +1319,7 @@ class DetailObjectInfoType(Serializable):
             Populate image information for objects on the periphery?
         include_out_of_range : bool
             Include the objects which are out of range (with no image location information)?
+        padding_fraction : None|float
         minimum_pad : int|float
         """
 
@@ -1332,7 +1333,7 @@ class DetailObjectInfoType(Serializable):
                 use_object = True
                 temp_object.set_chip_details_from_sicd(
                     sicd, layover_shift=layover_shift, populate_in_periphery=True,
-                    minimum_pad=minimum_pad)
+                    padding_fraction=padding_fraction, minimum_pad=minimum_pad)
                 in_image_count += 1
             return use_object, in_image_count
 

@@ -88,6 +88,9 @@ from sarpy.io.DEM.DTED import DTEDList, DTEDInterpolator
 
 logger = logging.getLogger(__name__)
 
+_unhandled_text = 'Got unhandled type `{}`'
+_unsupported_text = 'Got unsupported projection type `{}`'
+
 
 #############
 # COA Projection definition
@@ -285,7 +288,7 @@ def _get_sicd_type_specific_projection(sicd):
     def plane_projection():
         SCP = sicd.GeoData.SCP.ECF.get_array()
         uRow = sicd.Grid.Row.UVectECF.get_array()
-        uCol = sicd.Grid.Row.UVectECF.get_array()
+        uCol = sicd.Grid.Col.UVectECF.get_array()
 
         # noinspection PyUnusedLocal, PyIncorrectDocstring
         def method_projection(instance, row_transform, col_transform, time_coa, arp_coa, varp_coa):
@@ -325,7 +328,7 @@ def _get_sicd_type_specific_projection(sicd):
     else:
         # NB: this will have been noted by sicd.can_project_coordinates(), but is
         #   here for completeness
-        raise ValueError('Unhandled Grid.Type'.format(sicd.Grid.Type))
+        raise ValueError('Unhandled Grid.Type `{}`'.format(sicd.Grid.Type))
 
 
 def _get_sicd_adjustment_params(sicd, delta_arp, delta_varp, adj_params_frame):
@@ -422,7 +425,7 @@ def _get_sidd_type_projection(sidd):
         return plane_proj.TimeCOAPoly, method_projection
 
     if not isinstance(sidd, (SIDDType2, SIDDType1)):
-        raise TypeError('Got unhandled type {}'.format(type(sidd)))
+        raise TypeError(_unhandled_text.format(type(sidd)))
 
     if sidd.Measurement.PlaneProjection is not None:
         return pgp(sidd)
@@ -543,7 +546,39 @@ class COAProjection(object):
         # aperture location adjustment parameters
         self._delta_arp = _validate_adj_param(delta_arp, 'delta_arp')
         self._delta_varp = _validate_adj_param(delta_varp, 'delta_varp')
-        self._range_bias = 0.0 if range_bias is None else float(range_bias) # type: float
+        self._range_bias = 0.0 if range_bias is None else float(range_bias)  # type: float
+
+    @property
+    def delta_arp(self):
+        """
+        numpy.ndarray: The delta arp adjustable parameter
+        """
+
+        return self._delta_arp
+
+    @property
+    def delta_varp(self):
+        """
+        numpy.ndarray: The delta varp adjustable parameter
+        """
+
+        return self._delta_varp
+
+    @property
+    def range_bias(self):
+        """
+        float: The range bias adjustable parameter
+        """
+
+        return self._range_bias
+
+    @property
+    def delta_range(self):
+        """
+        float: Alias to the range bias adjustable parameter
+        """
+
+        return self._range_bias
 
     @classmethod
     def from_sicd(cls, sicd, delta_arp=None, delta_varp=None, range_bias=None, adj_params_frame='ECF'):
@@ -692,7 +727,7 @@ def _get_coa_projection(structure, use_structure_coa, **coa_args):
     elif isinstance(structure, (SIDDType2, SIDDType1)):
         return COAProjection.from_sidd(structure, **coa_args)
     else:
-        raise ValueError('Got unhandled type {}'.format(type(structure)))
+        raise ValueError(_unhandled_text.format(type(structure)))
 
 
 ###############
@@ -720,10 +755,10 @@ def _get_reference_point(structure):
     elif isinstance(structure, (SIDDType2, SIDDType1)):
         proj_type = structure.Measurement.ProjectionType
         if proj_type != 'PlaneProjection':
-            raise ValueError('Got unsupported projection type {}'.format(proj_type))
+            raise ValueError(_unsupported_text.format(proj_type))
         return structure.Measurement.PlaneProjection.ReferencePoint.ECEF.get_array(dtype='float64')
     else:
-        raise TypeError('Got unhandled type {}'.format(type(structure)))
+        raise TypeError(_unhandled_text.format(type(structure)))
 
 
 def _get_outward_norm(structure, gref):
@@ -751,7 +786,7 @@ def _get_outward_norm(structure, gref):
     elif isinstance(structure, (SIDDType2, SIDDType1)):
         proj_type = structure.Measurement.ProjectionType
         if proj_type != 'PlaneProjection':
-            raise ValueError('Got unsupported projection type {}'.format(proj_type))
+            raise ValueError(_unsupported_text.format(proj_type))
         the_proj = structure.Measurement.PlaneProjection
         # image plane details
         uRow = the_proj.ProductPlane.RowUnitVector.get_array(dtype='float64')
@@ -763,7 +798,7 @@ def _get_outward_norm(structure, gref):
             uGPN *= -1
         return uGPN
     else:
-        raise TypeError('Got unhandled type {}'.format(type(structure)))
+        raise TypeError(_unhandled_text.format(type(structure)))
 
 
 def _extract_plane_params(structure):
@@ -811,7 +846,7 @@ def _extract_plane_params(structure):
     elif isinstance(structure, (SIDDType1, SIDDType2)):
         proj_type = structure.Measurement.ProjectionType
         if proj_type != 'PlaneProjection':
-            raise ValueError('Got unsupported projection type {}'.format(proj_type))
+            raise ValueError(_unsupported_text.format(proj_type))
 
         the_proj = structure.Measurement.PlaneProjection
 
@@ -1743,7 +1778,7 @@ def image_to_ground_dem(
         append_grid_elements(lon_min, lon_max, lat_lon_grids)
 
     if len(lat_lon_grids) == 1:
-        return _image_to_ground_dem_block(
+        coords = _image_to_ground_dem_block(
             im_points, coa_proj, dem_interpolator, vertical_step_size,
             lat_lon_grids[0], block_size, lat_grid_size, lon_grid_size)
     else:
@@ -1754,7 +1789,7 @@ def image_to_ground_dem(
                     (llh_rough[:, 1] >= entry[2]) & (llh_rough[:, 1] <= entry[3]))
             if numpy.any(mask):
                 coords[mask, :] = _image_to_ground_dem_block(
-                    im_points[mask, :], coa_proj, dem_interpolator, vertical_step_size,
+                    im_points_view[mask, :], coa_proj, dem_interpolator, vertical_step_size,
                     entry, block_size, lat_grid_size, lon_grid_size)
     if len(orig_shape) == 1:
         coords = numpy.reshape(coords, (-1,))

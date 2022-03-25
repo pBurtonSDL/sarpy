@@ -148,7 +148,7 @@ class SICDDetails(NITFDetails):
                 des_bytes = self.get_des_bytes(i)
                 # noinspection PyBroadException
                 try:
-                    root_node, xml_ns = parse_xml_from_string(des_bytes.decode('utf-8').strip())
+                    root_node, xml_ns = parse_xml_from_string(des_bytes.decode('utf-8').strip().encode())
                     if 'SIDD' in root_node.tag:  # namespace makes this ugly
                         # NOTE that SIDD files are supposed to have the corresponding
                         # SICD xml as one of the DES AFTER the SIDD xml.
@@ -179,7 +179,7 @@ class SICDDetails(NITFDetails):
                 # This is an old format SICD
                 des_bytes = self.get_des_bytes(i)
                 try:
-                    root_node, xml_ns = parse_xml_from_string(des_bytes)
+                    root_node, xml_ns = parse_xml_from_string(des_bytes.decode('utf-8').strip().encode())
                     if 'SICD' in root_node.tag:  # namespace makes this ugly
                         self._des_index = i
                         self._des_header = None
@@ -799,6 +799,13 @@ class SICDWriter(NITFWriter):
         img_details = []
 
         for i, entry in enumerate(image_segment_limits):
+            if i == 0:
+                iloc = '0000000000'
+            else:
+                prev_lims = image_segment_limits[i-1]
+                prev_rows = prev_lims[1] - prev_lims[0]
+                iloc = '{0:05d}00000'.format(prev_rows)
+
             this_rows = entry[1]-entry[0]
             this_cols = entry[3]-entry[2]
             subhead = ImageSegmentHeader(
@@ -820,7 +827,7 @@ class SICDWriter(NITFWriter):
                 NBPP=abpp,
                 IDLVL=i+1,
                 IALVL=i,
-                ILOC='{0:05d}{1:05d}'.format(entry[0], entry[2]),
+                ILOC=iloc,
                 Bands=ImageBands(values=bands),
                 Security=self._security_tags)
             img_details.append(ImageDetails(2, dtype, transform_data, entry, subhead))

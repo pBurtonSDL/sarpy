@@ -1,14 +1,9 @@
 """
-Definition for the DetailSensorInfo AFRL labeling object
+Definition for the SensorInfo AFRL labeling object
 """
 
 __classification__ = "UNCLASSIFIED"
-__authors__ = ("Thomas McCullough", "Thomas Rackers")
-
-# TODO: commentary of field troubles
-#   - Polarization is too restrictive in formatting and has a conceptual flaw,
-#       it should be a list of transmit and receive polarizations.
-#   - Type should be enumerated/specified for it to have much utility, like {SAR, EO, Thermal, Other} or something
+__authors__ = "Thomas McCullough"
 
 
 from typing import Optional
@@ -27,7 +22,7 @@ from .blocks import LatLonEleType
 class BeamWidthType(Serializable, Arrayable):
     _fields = ('Azimuth', 'Elevation')
     _required = _fields
-    _numeric_format = {key: '0.17E' for key in _fields}
+    _numeric_format = {key: '0.17G' for key in _fields}
     # Descriptors
     Azimuth = FloatDescriptor(
         'Azimuth', _required, strict=True, docstring='The Azimuth attribute.')  # type: float
@@ -93,7 +88,7 @@ class BeamWidthType(Serializable, Arrayable):
 class SquintAngleType(Serializable):
     _fields = ('GroundPlane', 'SlantPlane')
     _required = _fields
-    _numeric_format = {el: '0.17E' for el in _fields}
+    _numeric_format = {el: '0.17G' for el in _fields}
     # descriptor
     GroundPlane = FloatDescriptor(
         'GroundPlane', _required,
@@ -129,7 +124,7 @@ class AircraftLocationType(Serializable, Arrayable):
     """A three-dimensional geographic point in WGS-84 coordinates."""
     _fields = ('Lat', 'Lon', 'Altitude')
     _required = _fields
-    _numeric_format = {'Lat': '0.17E', 'Lon': '0.17E', 'Altitude': '0.17E'}
+    _numeric_format = {'Lat': '0.17G', 'Lon': '0.17G', 'Altitude': '0.17G'}
     # descriptors
     Lat = FloatDescriptor(
         'Lat', _required, strict=True,
@@ -203,7 +198,7 @@ class AircraftLocationType(Serializable, Arrayable):
         raise ValueError('Expected array to be numpy.ndarray, list, or tuple, got {}'.format(type(array)))
 
 
-class DetailSensorInfoType(Serializable):
+class SensorInfoType(Serializable):
     _fields = (
         'Name', 'SensorMfg', 'OperatingAgency', 'Type', 'Mode', 'Band',
         'Bandwidth', 'CenterFrequency', 'NearRange', 'SlantRangeSwathWidth',
@@ -213,6 +208,10 @@ class DetailSensorInfoType(Serializable):
     _required = (
         'Type', 'Range', 'DepressionAngle', 'Aimpoint', 'Look', 'SquintAngle',
         'AircraftLocation', 'AircraftVelocity')
+    _numeric_format = {
+        'Bandwidth': '0.17G', 'CenterFrequency': '0.17G', 'NearRange': '0.17G',
+        'SlantRangeSwathWidth': '0.17G', 'Range': '0.17G', 'DepressionAngle': '0.17G',
+        'LinearDynamicRange': '0.17G', 'AircraftHeading': '0.17G', 'AircraftTrackAngle': '0.17G',}
     # descriptors
     Name = StringDescriptor(
         'Name', _required,
@@ -369,7 +368,7 @@ class DetailSensorInfoType(Serializable):
         self.AircraftVelocity = AircraftVelocity
         self.FlightNumber = FlightNumber
         self.PassNumber = PassNumber
-        super(DetailSensorInfoType, self).__init__(**kwargs)
+        super(SensorInfoType, self).__init__(**kwargs)
 
     @classmethod
     def from_sicd(cls, sicd):
@@ -382,7 +381,7 @@ class DetailSensorInfoType(Serializable):
 
         Returns
         -------
-        DetailSensorInfoType
+        SensorInfoType
         """
 
         transmit_freq_proc = sicd.ImageFormation.TxFrequencyProc
@@ -397,7 +396,7 @@ class DetailSensorInfoType(Serializable):
             )
         )
         arp_pos_llh = ecf_to_geodetic(sicd.SCPCOA.ARPPos.get_array())
-        return DetailSensorInfoType(
+        return SensorInfoType(
             Name=sicd.CollectionInfo.CollectorName,
             Type='SAR',
             Mode=sicd.CollectionInfo.RadarMode.ModeType,

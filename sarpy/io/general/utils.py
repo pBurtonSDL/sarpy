@@ -7,6 +7,7 @@ __author__ = "Thomas McCullough"
 
 
 from typing import Union, Tuple
+import hashlib
 
 import numpy
 
@@ -156,3 +157,27 @@ def is_file_like(the_input):
         value = getattr(the_input, attribute, None)
         out &= callable(value)
     return out
+
+
+def calculate_md5(the_path, chunk_size=1024*1024):
+    """
+    Calculate the md5 checksum of a given file defined by a path.
+
+    Parameters
+    ----------
+    the_path : str
+        The path to the file
+    chunk_size : int
+        The chunk size for processing
+
+    Returns
+    -------
+    str
+        The 32 character MD5 hex digest of the given file
+    """
+
+    md5_hash = hashlib.md5()
+    with open(the_path, 'rb') as fi:
+        for chunk in iter(lambda: fi.read(chunk_size), b''):
+            md5_hash.update(chunk)
+    return md5_hash.hexdigest()

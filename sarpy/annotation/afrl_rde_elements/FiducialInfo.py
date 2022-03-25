@@ -1,9 +1,9 @@
 """
-Definition for the DetailFiducialInfo AFRL labeling object
+Definition for the FiducialInfo NGA modified RDE/AFRL labeling object
 """
 
 __classification__ = "UNCLASSIFIED"
-__authors__ = ("Thomas McCullough", "Thomas Rackers")
+__authors__ = "Thomas McCullough"
 
 
 from typing import Optional, List
@@ -12,14 +12,18 @@ import numpy
 
 from sarpy.io.xml.base import Serializable
 from sarpy.io.xml.descriptors import IntegerDescriptor, SerializableDescriptor, \
-    SerializableListDescriptor, StringDescriptor
+    SerializableListDescriptor, StringDescriptor, StringEnumDescriptor
 from sarpy.io.complex.sicd_elements.blocks import RowColType
 from sarpy.io.complex.sicd_elements.SICD import SICDType
 
 from .base import DEFAULT_STRICT
-from .blocks import LatLonEleType, RangeCrossRangeType
+from .blocks import LatLonEleType, RangeCrossRangeType, \
+    ProjectionPerturbationType, LabelSourceType
 
 logger = logging.getLogger(__name__)
+
+_no_projection_text = 'This sicd does not permit projection,\n\t' \
+                      'so the image location can not be inferred'
 
 
 class ImageLocationType(Serializable):
@@ -66,9 +70,7 @@ class ImageLocationType(Serializable):
             return None
 
         if not the_structure.can_project_coordinates():
-            logger.warning(
-                'This sicd does not permit projection,\n\t'
-                'so the image location can not be inferred')
+            logger.warning(_no_projection_text)
             return None
 
         if isinstance(the_structure, SICDType):
@@ -111,7 +113,7 @@ class GeoLocationType(Serializable):
 
     # noinspection PyUnusedLocal
     @classmethod
-    def from_image_location(cls, image_location, the_structure, projection_type='HAE', **kwargs):
+    def from_image_location(cls, image_location, the_structure, projection_type='HAE', **proj_kwargs):
         """
         Construct the geographical location from the image location via
         projection using the SICD model.
@@ -129,7 +131,7 @@ class GeoLocationType(Serializable):
             The projection type selector, one of `['PLANE', 'HAE', 'DEM']`. Using `'DEM'`
             requires configuration for the DEM pathway described in
             :func:`sarpy.geometry.point_projection.image_to_ground_dem`.
-        kwargs
+        proj_kwargs
             The keyword arguments for the :func:`SICDType.project_image_to_ground_geo` method.
 
         Returns
@@ -142,15 +144,11 @@ class GeoLocationType(Serializable):
             return None
 
         if not the_structure.can_project_coordinates():
-            logger.warning(
-                'This sicd does not permit projection,\n\t'
-                'so the image location can not be inferred')
+            logger.warning(_no_projection_text)
             return None
 
         # make sure this is defined, for the sake of efficiency
         the_structure.define_coa_projection(overide=False)
-
-        kwargs = {}
 
         if isinstance(the_structure, SICDType):
             image_shift = numpy.array(
@@ -160,7 +158,7 @@ class GeoLocationType(Serializable):
 
         coords = image_location.CenterPixel.get_array(dtype='float64') + image_shift
         geo_coords = the_structure.project_image_to_ground_geo(
-            coords, ordering='latlong', projection_type=projection_type, **kwargs)
+            coords, ordering='latlong', projection_type=projection_type, **proj_kwargs)
 
         out = GeoLocationType(CenterPixel=geo_coords)
         return out
@@ -197,7 +195,7 @@ class TheFiducialType(Serializable):
         'ImageLocation', 'GeoLocation',
         'IPRWidth3dB', 'IPRWidth18dB', 'IPRWidth3dB18dBRatio',
         'PeakSideLobeRatio', 'IntegratedSideLobeRatio',
-        'SlantPlane', 'GroundPlane')
+        'SlantPlane', 'GroundPlane', 'ProjectionPerturbation')
     _required = (
         'FiducialType', 'ImageLocation', 'GeoLocation')
     # descriptors
@@ -208,8 +206,9 @@ class TheFiducialType(Serializable):
         'SerialNumber', _required, strict=DEFAULT_STRICT,
         docstring='The serial number of the fiducial')  # type: Optional[str]
     FiducialType = StringDescriptor(
-        'FiducialType', _required, strict=DEFAULT_STRICT,
-        docstring='Description for the type of fiducial')  # type: str
+        'FiducialType',
+        _required, strict=DEFAULT_STRICT,
+        docstring='The type of fiducial')  # type: str
     DatasetFiducialNumber = IntegerDescriptor(
         'DatasetFiducialNumber', _required,
         docstring='Unique number of the fiducial within the selected dataset, '
@@ -251,12 +250,15 @@ class TheFiducialType(Serializable):
         'GroundPlane', PhysicalLocationType, _required,
         docstring='Center of the object in the ground plane'
     )  # type: Optional[PhysicalLocationType]
+    ProjectionPerturbation = SerializableDescriptor(
+        'ProjectionPerturbation', ProjectionPerturbationType, _required, 
+        docstring='') # type: Optional[ProjectionPerturbationType]
 
     def __init__(self, Name=None, SerialNumber=None, FiducialType=None,
                  DatasetFiducialNumber=None, ImageLocation=None, GeoLocation=None,
                  IPRWidth3dB=None, IPRWidth18dB=None, IPRWidth3dB18dBRatio=None,
                  PeakSideLobeRatio=None, IntegratedSideLobeRatio=None,
-                 SlantPlane=None, GroundPlane=None,
+                 SlantPlane=None, GroundPlane=None, ProjectionPerturbation=None,
                  **kwargs):
         """
         Parameters
@@ -274,6 +276,7 @@ class TheFiducialType(Serializable):
         IntegratedSideLobeRatio : None|RangeCrossRangeType|numpy.ndarray|list|tuple
         SlantPlane : None|PhysicalLocationType
         GroundPlane : None|PhysicalLocationType
+        ProjectionPerturbation : None|ProjectionPerturbationType
         kwargs
             Other keyword arguments
         """
@@ -295,25 +298,10 @@ class TheFiducialType(Serializable):
         self.IntegratedSideLobeRatio = IntegratedSideLobeRatio
         self.SlantPlane = SlantPlane
         self.GroundPlane = GroundPlane
+        self.ProjectionPerturbation = ProjectionPerturbation
         super(TheFiducialType, self).__init__(**kwargs)
 
-    def set_default_width_from_sicd(self, sicd, override=False):
-        """
-        Sets a default value for the 3dB Width from the given SICD.
-
-        Parameters
-        ----------
-        sicd : SICDType
-        override : bool
-            Override any present value?
-        """
-
-        if self.IPRWidth3dB is None or override:
-            self.IPRWidth3dB = RangeCrossRangeType.from_array(
-                (sicd.Grid.Row.ImpRespWid, sicd.Grid.Col.ImpRespWid))
-            # TODO: this seems questionable to me?
-
-    def set_image_location_from_sicd(self, sicd):
+    def set_image_location_from_sicd(self, sicd, populate_in_periphery=False):
         """
         Set the image location information with respect to the given SICD.
 
@@ -342,9 +330,7 @@ class TheFiducialType(Serializable):
             return -1
 
         if not sicd.can_project_coordinates():
-            logger.warning(
-                'This sicd does not permit projection,\n\t'
-                'so the image location can not be inferred')
+            logger.warning(_no_projection_text)
             return -1
 
         image_location = ImageLocationType.from_geolocation(self.GeoLocation, sicd)
@@ -360,13 +346,14 @@ class TheFiducialType(Serializable):
         else:
             placement = 3
 
-        if placement in [2, 3]:
+        if placement == 3 or (placement == 2 and not populate_in_periphery):
             return placement
 
         self.ImageLocation = image_location
         self.SlantPlane = PhysicalLocationType(Physical=image_location)
+        return placement
 
-    def set_geo_location_from_sicd(self, sicd, projection_type='HAE', **kwargs):
+    def set_geo_location_from_sicd(self, sicd, projection_type='HAE', **proj_kwargs):
         """
         Set the geographical location information with respect to the given SICD,
         assuming that the image coordinates are populated.
@@ -383,7 +370,7 @@ class TheFiducialType(Serializable):
             The projection type selector, one of `['PLANE', 'HAE', 'DEM']`. Using `'DEM'`
             requires configuration for the DEM pathway described in
             :func:`sarpy.geometry.point_projection.image_to_ground_dem`.
-        kwargs
+        proj_kwargs
             The keyword arguments for the :func:`SICDType.project_image_to_ground_geo` method.
         """
 
@@ -398,20 +385,18 @@ class TheFiducialType(Serializable):
             return
 
         if not sicd.can_project_coordinates():
-            logger.warning(
-                'This sicd does not permit projection,\n\t'
-                'so the geographical location can not be inferred')
+            logger.warning(_no_projection_text)
             return
 
         self.GeoLocation = GeoLocationType.from_image_location(
-            self.ImageLocation, sicd, projection_type=projection_type, **kwargs)
+            self.ImageLocation, sicd, projection_type=projection_type, **proj_kwargs)
 
 
-class DetailFiducialInfoType(Serializable):
+class FiducialInfoType(Serializable):
     _fields = (
-        'NumberOfFiducialsInImage', 'NumberOfFiducialsInScene', 'Fiducials')
+        'NumberOfFiducialsInImage', 'NumberOfFiducialsInScene', 'LabelSource', 'Fiducials')
     _required = (
-        'NumberOfFiducialsInImage', 'NumberOfFiducialsInScene', 'Fiducials')
+        'NumberOfFiducialsInImage', 'NumberOfFiducialsInScene', 'LabelSource', 'Fiducials')
     _collections_tags = {'Fiducials': {'array': False, 'child_tag': 'Fiducial'}}
     # descriptors
     NumberOfFiducialsInImage = IntegerDescriptor(
@@ -420,17 +405,21 @@ class DetailFiducialInfoType(Serializable):
     NumberOfFiducialsInScene = IntegerDescriptor(
         'NumberOfFiducialsInScene', _required, strict=DEFAULT_STRICT,
         docstring='Number of ground truthed objects in the scene.')  # type: int
+    LabelSource = SerializableDescriptor(
+        'LabelSource', LabelSourceType, _required, strict=DEFAULT_STRICT,
+        docstring='The source of the labels')  # type: LabelSourceType
     Fiducials = SerializableListDescriptor(
         'Fiducials', TheFiducialType, _collections_tags, _required, strict=DEFAULT_STRICT,
         docstring='The object collection')  # type: List[TheFiducialType]
 
     def __init__(self, NumberOfFiducialsInImage=None, NumberOfFiducialsInScene=None,
-                 Fiducials=None, **kwargs):
+                 LabelSource=None, Fiducials=None, **kwargs):
         """
         Parameters
         ----------
         NumberOfFiducialsInImage : int
         NumberOfFiducialsInScene : int
+        LabelSource : LabelSourceType
         Fiducials : None|List[TheFiducialType]
         kwargs
             Other keyword arguments
@@ -442,8 +431,9 @@ class DetailFiducialInfoType(Serializable):
             self._xml_ns_key = kwargs['_xml_ns_key']
         self.NumberOfFiducialsInImage = NumberOfFiducialsInImage
         self.NumberOfFiducialsInScene = NumberOfFiducialsInScene
+        self.LabelSource = LabelSource
         self.Fiducials = Fiducials
-        super(DetailFiducialInfoType, self).__init__(**kwargs)
+        super(FiducialInfoType, self).__init__(**kwargs)
 
     def set_image_location_from_sicd(
             self, sicd, populate_in_periphery=False, include_out_of_range=False):
@@ -462,15 +452,12 @@ class DetailFiducialInfoType(Serializable):
         """
 
         def update_fiducial(temp_fid, in_image_count):
-            temp_fid.set_default_width_from_sicd(sicd)  # todo: I'm not sure that this is correct?
-            status = temp_fid.set_image_location_from_sicd(sicd)
+            status = temp_fid.set_image_location_from_sicd(sicd, populate_in_periphery=populate_in_periphery)
             use_fid = False
             if status == 0:
                 raise ValueError('Fiducial already has image details set')
             if status == 1 or (status == 2 and populate_in_periphery):
                 use_fid = True
-                temp_fid.set_chip_details_from_sicd(
-                    sicd, populate_in_periphery=True)
                 in_image_count += 1
             return use_fid, in_image_count
 

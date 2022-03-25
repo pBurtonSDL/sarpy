@@ -14,6 +14,7 @@ import pkgutil
 
 import numpy
 
+from sarpy.compliance import SarpyError
 from sarpy.io.general.utils import validate_range, reverse_range, is_file_like
 
 logger = logging.getLogger(__name__)
@@ -22,14 +23,6 @@ logger = logging.getLogger(__name__)
 # module variables
 _SUPPORTED_TRANSFORM_VALUES = ('COMPLEX', )
 READER_TYPES = ('SICD', 'SIDD', 'CPHD', 'CRSD', 'OTHER')
-
-
-#################
-# some custom exceptions
-
-class SarpyError(Exception):
-    """A custom base exception class"""
-    pass
 
 
 class SarpyIOError(SarpyError):
@@ -288,6 +281,8 @@ class BaseChipper(object):
                 out.real = data[:, :, 0::2]
                 out.imag = data[:, :, 1::2]
                 return out
+            else:
+                raise ValueError('Unsupported transform_data value `{}`'.format(self._transform_data))
         raise ValueError('Unsupported transform_data value {}'.format(self._transform_data))
 
     def _reorder_data(self, data):
@@ -493,7 +488,7 @@ class AggregateChipper(BaseChipper):
         """
 
         if rng[2] > 0:
-            if rng[1] < start_ind or rng[0] >= stop_ind:
+            if rng[1] <= start_ind or rng[0] >= stop_ind:
                 # there is no overlap
                 return None, None
             # find smallest element rng[0] + mult*rng[2] which is >= start_ind
@@ -504,7 +499,7 @@ class AggregateChipper(BaseChipper):
             mult2 = int(numpy.floor((max_ind - rng[0]) / rng[2]))
             ind2 = rng[0] + mult2 * rng[2]
         else:
-            if rng[0] < start_ind or rng[1] >= stop_ind:
+            if rng[0] <= start_ind or rng[1] >= stop_ind:
                 return None, None
             # find largest element rng[0] + mult*rng[2] which is <= stop_ind-1
             mult1 = 0 if rng[0] < stop_ind else int(numpy.floor((stop_ind - 1 - rng[0])/rng[2]))

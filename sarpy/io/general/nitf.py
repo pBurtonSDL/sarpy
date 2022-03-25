@@ -56,6 +56,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+_unhandled_version_text = 'Unhandled NITF version `{}`'
+
 
 ########
 # base expected functionality for a module with an implemented Reader
@@ -190,7 +192,13 @@ class NITFDetails(object):
             raise SarpyIOError('Not a NITF 2.1 file.')
         if not isinstance(version_info, bytes):
             raise ValueError('Input file like object not open in bytes mode.')
-        version_info = version_info.decode('utf-8')
+        try:
+            version_info = version_info.decode('utf-8')
+        except Exception as e:
+            msg = 'Failed checking potential version with error\n\t{}'.format(e)
+            logger.info(msg)
+            raise SarpyIOError(msg)
+
         if version_info[:4] != 'NITF':
             raise SarpyIOError('File {} is not a NITF file.'.format(self._file_name))
         self._nitf_version = version_info[4:]
@@ -216,7 +224,7 @@ class NITFDetails(object):
             header_string = self._file_object.read(header_length)
             self._nitf_header = NITFHeader0.from_bytes(header_string, 0)
         else:
-            raise ValueError('Unhandled version {}'.format(self._nitf_version))
+            raise ValueError(_unhandled_version_text.format(self._nitf_version))
 
         if self._nitf_header.get_bytes_length() != header_length:
             logger.critical(
@@ -379,7 +387,7 @@ class NITFDetails(object):
         elif self.nitf_version == '02.00':
             out = ImageSegmentHeader0.from_bytes(ih, 0)
         else:
-            raise ValueError('Unhandled version {}'.format(self.nitf_version))
+            raise ValueError(_unhandled_version_text.format(self.nitf_version))
         if out.is_masked:
             # read the mask subheader bytes
             the_offset = int(self.img_segment_offsets[index])
@@ -449,7 +457,7 @@ class NITFDetails(object):
         elif self._nitf_version == '02.00':
             return TextSegmentHeader0.from_bytes(th, 0)
         else:
-            raise ValueError('Unhandled version {}'.format(self.nitf_version))
+            raise ValueError(_unhandled_version_text.format(self.nitf_version))
 
     def get_graphics_subheader_bytes(self, index):
         """
@@ -689,7 +697,7 @@ class NITFDetails(object):
         elif self.nitf_version == '02.00':
             return DataExtensionHeader0.from_bytes(dh, 0)
         else:
-            raise ValueError('Unhandled version {}'.format(self.nitf_version))
+            raise ValueError(_unhandled_version_text.format(self.nitf_version))
 
     def get_res_subheader_bytes(self, index):
         """
@@ -1686,7 +1694,8 @@ class NITFReader(BaseReader):
             return
 
         del self._chipper
-        gc.collect()
+        if callable(gc.collect):
+            gc.collect()
 
         for fil in self._cached_files:
             if os.path.exists(fil):
@@ -2083,7 +2092,9 @@ def get_npp_block(value):
 
 def image_segmentation(rows, cols, pixel_size):
     """
-    Determine the appropriate segmentation for the image.
+    Determine the appropriate segmentation for the image. This is driven
+    by the SICD/SIDD standard, and not the only generally feasible segmentation
+    scheme for other NITF file types.
 
     Parameters
     ----------
@@ -2097,26 +2108,17 @@ def image_segmentation(rows, cols, pixel_size):
         Of the form `((row start, row end, column start, column end))`
     """
 
-    im_seg_limit = 10**10 - 2  # as big as can be stored in 10 digits, given at least 2 bytes per pixel
-    dim_limit = 10**5 - 1  # as big as can be stored in 5 digits
+    im_seg_limit = 10**10 - 2  # as big as can be stored in 10 digits
     im_segments = []
-
     row_offset = 0
-    col_offset = 0
-    col_limit = min(dim_limit, cols)
-    while (row_offset < rows) and (col_offset < cols):
-        # determine row count, given row_offset, col_offset, and col_limit
+    while row_offset < rows:
+        # determine row count, given row_offset and column size
         # how many bytes per row for this column section
-        row_memory_size = (col_limit - col_offset) * pixel_size
-        # how many rows can we use
-        row_count = min(dim_limit, rows - row_offset, int(im_seg_limit / row_memory_size))
-        im_segments.append((row_offset, row_offset + row_count, col_offset, col_limit))
+        row_memory_size = cols*pixel_size
+        # how many rows can we use?
+        row_count = min(99999, rows - row_offset, int(im_seg_limit / row_memory_size))
+        im_segments.append((row_offset, row_offset + row_count, 0, cols))
         row_offset += row_count  # move the next row offset
-        if row_offset == rows:
-            # move over to the next column section
-            col_offset = col_limit
-            col_limit = min(col_offset + dim_limit, cols)
-            row_offset = 0
     return tuple(im_segments)
 
 
@@ -2753,12 +2755,12 @@ class MemMap(object):
 
     __slots__ = ('_mem_map', '_file_obj', '_offset_shift')
 
-    def __init__(self, file_name, length, offset):
+    def __init__(self, file_obj, length, offset):
         """
 
         Parameters
         ----------
-        file_name : str
+        file_obj : str|BinaryIO
         length : int
         offset : int
         """
@@ -2774,7 +2776,10 @@ class MemMap(object):
         offset = offset - self._offset_shift
         length = length + self._offset_shift
         # establish the mem map
-        self._file_obj = open(file_name, 'rb')
+        if isinstance(file_obj, str):
+            self._file_obj = open(file_obj, 'rb')
+        else:
+            self._file_obj = file_obj
         self._mem_map = mmap.mmap(self._file_obj.fileno(), length, access=mmap.ACCESS_READ, offset=offset)
 
     def read(self, n):

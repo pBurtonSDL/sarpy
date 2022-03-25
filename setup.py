@@ -3,10 +3,7 @@ Setup module for SarPy.
 """
 
 import os
-import sys
 from setuptools import setup, find_packages
-from codecs import open
-
 
 # Get the long description from the README file
 here = os.path.abspath(os.path.dirname(__file__))
@@ -43,6 +40,7 @@ def my_package_data():
     find_dirs('sarpy', 'io/phase_history/cphd_schema/', package_list)
     find_dirs('sarpy', 'io/phase_history/crsd_schema/', package_list)
     find_dirs('sarpy', 'io/product/sidd_schema/', package_list)
+    find_dirs('sarpy', 'annotation/afrl_rde_schema/', package_list)
     return package_list
 
 
@@ -76,7 +74,8 @@ setup(name=parameters['__title__'],
           'Programming Language :: Python :: 3.6',
           'Programming Language :: Python :: 3.7',
           'Programming Language :: Python :: 3.8',
-          'Programming Language :: Python :: 3.9'
+          'Programming Language :: Python :: 3.9',
+          'Programming Language :: Python :: 3.10'
       ],
       platforms=['any'],
       license='MIT')
