@@ -41,9 +41,9 @@ if __name__ == '__main__':
     if '.' in config.input_path:
         valid = sicd_consistency.check_file(config.input_path)
         if valid:
-            logger.info('\nSICD: {} has been validated with no errors'.format(config.input_path))
+            logger.info('SICD: {} has been validated with no findings\n'.format(config.input_path))
         else:
-            logger.error('\nSICD: {} has apparent errors'.format(config.input_path))
+            logger.info('SICD: {} has apparent findings\n'.format(config.input_path))
     else:
         for subdir, dir, files in os.walk(config.input_path):
             for file in files:
@@ -51,6 +51,6 @@ if __name__ == '__main__':
                 if filepath.endswith('.ntf') or filepath.endswith('.nitf'):
                     valid = sicd_consistency.check_file(filepath)
                     if valid:
-                        logger.info('\nSICD: {} has been validated with no errors\n'.format(filepath))
+                        logger.info('SICD: {} has been validated with no findings\n'.format(filepath))
                     else:
-                        logger.error('\nSICD: {} has apparent errors\n'.format(filepath))
+                        logger.info('SICD: {} has apparent findings\n'.format(filepath))
