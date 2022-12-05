@@ -8,13 +8,14 @@ __author__ = "Thomas McCullough"
 
 import logging
 import os
+from typing import Union, Tuple, Sequence, Optional
 
 import numpy
 from numpy.polynomial import polynomial
 from scipy.constants import speed_of_light
 
 from sarpy.io.complex.nisar import _stringify
-from sarpy.io.complex.base import SICDTypeReader, h5py, is_hdf5
+from sarpy.io.complex.base import SICDTypeReader
 from sarpy.io.complex.sicd_elements.blocks import Poly2DType, Poly1DType
 from sarpy.io.complex.sicd_elements.SICD import SICDType
 from sarpy.io.complex.sicd_elements.CollectionInfo import CollectionInfoType, \
@@ -31,62 +32,30 @@ from sarpy.io.complex.sicd_elements.ImageFormation import ImageFormationType, \
     RcvChanProcType
 from sarpy.io.complex.sicd_elements.RMA import RMAType, INCAType
 from sarpy.io.complex.sicd_elements.Radiometric import RadiometricType
-from sarpy.io.general.base import BaseReader, BaseChipper, SarpyIOError
-from sarpy.io.general.utils import get_seconds, parse_timestring, is_file_like
 from sarpy.io.complex.utils import fit_position_xvalidation, two_dim_poly_fit
+
+from sarpy.io.general.base import SarpyIOError
+from sarpy.io.general.data_segment import HDF5DatasetSegment, BandAggregateSegment
+from sarpy.io.general.format_function import ComplexFormatFunction
+from sarpy.io.general.utils import get_seconds, parse_timestring, is_file_like, is_hdf5, h5py
 
 logger = logging.getLogger(__name__)
 
-########
-# base expected functionality for a module with an implemented Reader
 
-
-def is_a(file_name):
-    """
-    Tests whether a given file_name corresponds to a ICEYE file. Returns a reader instance, if so.
-
-    Parameters
-    ----------
-    file_name : str|BinaryIO
-        the file_name to check
-
-    Returns
-    -------
-    CSKReader|None
-        `CSKReader` instance if Cosmo Skymed file, `None` otherwise
-    """
-
-    if is_file_like(file_name):
-        return None
-
-    if not is_hdf5(file_name):
-        return None
-
-    if h5py is None:
-        return None
-
-    try:
-        iceye_details = ICEYEDetails(file_name)
-        logger.info('File {} is determined to be a ICEYE file.'.format(file_name))
-        return ICEYEReader(iceye_details)
-    except SarpyIOError:
-        return None
-
-
-def _parse_time(input):
+def _parse_time(input_str: Union[bytes, str]) -> numpy.datetime64:
     """
     Parse the timestring.
 
     Parameters
     ----------
-    input : bytes|str
+    input_str : bytes|str
 
     Returns
     -------
     numpy.datetime64
     """
 
-    return parse_timestring(_stringify(input), precision='us')
+    return parse_timestring(_stringify(input_str), precision='us')
 
 
 class ICEYEDetails(object):
@@ -95,7 +64,7 @@ class ICEYEDetails(object):
     """
     __slots__ = ('_file_name', )
 
-    def __init__(self, file_name):
+    def __init__(self, file_name: str):
         """
 
         Parameters
@@ -121,25 +90,25 @@ class ICEYEDetails(object):
         self._file_name = file_name
 
     @property
-    def file_name(self):
+    def file_name(self) -> str:
         """
         str: the file name
         """
 
         return self._file_name
 
-    def get_sicd(self):
+    def get_sicd(self) -> (SICDType, Optional[Tuple[int, ...]], Tuple[int, ...]):
         """
-        Gets the SICD structure.
+        Gets the SICD structure and associated details for constructing the data segment.
 
         Returns
         -------
-        Tuple[SICDType, tuple, tuple]
-            The sicd structure, the data size argument, and the symmetry argument.
+        sicd : SICDType
+        reverse_axes : None|Tuple[int, ...]
+        transpose_axes : Tuple[int, ...]
         """
 
-        def get_collection_info():
-            # type: () -> CollectionInfoType
+        def get_collection_info() -> CollectionInfoType:
 
             mode_id_type_map = {
                 "SpotlightExtendedArea": "DYNAMIC STRIPMAP", }
@@ -155,8 +124,7 @@ class ICEYEDetails(object):
                     ModeType=mode_type,
                     ModeID=mode_id))
 
-        def get_image_creation():
-            # type: () -> ImageCreationType
+        def get_image_creation() -> ImageCreationType:
             from sarpy.__about__ import __version__
             return ImageCreationType(
                 Application='ICEYE_P_{}'.format(hf['processor_version'][()]),
@@ -164,8 +132,7 @@ class ICEYEDetails(object):
                 Site='Unknown',
                 Profile='sarpy {}'.format(__version__))
 
-        def get_image_data():
-            # type: () -> ImageDataType
+        def get_image_data() -> ImageDataType:
 
             samp_prec = _stringify(hf['sample_precision'][()])
             if samp_prec.upper() == 'INT16':
@@ -195,27 +162,22 @@ class ICEYEDetails(object):
                 FullImage=(num_rows, num_cols),
                 SCPPixel=(scp_row, scp_col))
 
-        def get_geo_data():
-            # type: () -> GeoDataType
+        def get_geo_data() -> GeoDataType:
             # NB: the remainder will be derived.
             return GeoDataType(
                 SCP=SCPType(
                     LLH=[coord_center[2], coord_center[3], avg_scene_height]))
 
-        def get_timeline():
-            # type: () -> TimelineType
-
+        def get_timeline() -> TimelineType:
             acq_prf = hf['acquisition_prf'][()]
             return TimelineType(
                 CollectStart=start_time,
                 CollectDuration=duration,
                 IPP=[IPPSetType(index=0, TStart=0, TEnd=duration,
-                                IPPStart=0, IPPEnd=int(round(acq_prf*duration)),
+                                IPPStart=0, IPPEnd=int(round(acq_prf*duration) - 1),
                                 IPPPoly=[0, acq_prf]), ])
 
-        def get_position():
-            # type: () -> PositionType
-            # fetch the state information
+        def get_position() -> PositionType:
             times_str = hf['state_vector_time_utc'][:, 0]
             times = numpy.zeros((times_str.shape[0], ), dtype='float64')
             positions = numpy.zeros((times.size, 3), dtype='float64')
@@ -228,8 +190,7 @@ class ICEYEDetails(object):
             P_x, P_y, P_z = fit_position_xvalidation(times, positions, velocities, max_degree=8)
             return PositionType(ARPPoly=XYZPolyType(X=P_x, Y=P_y, Z=P_z))
 
-        def get_radar_collection():
-            # type : () -> RadarCollection
+        def get_radar_collection() -> RadarCollectionType:
             return RadarCollectionType(
                 TxPolarization=tx_pol,
                 TxFrequency=(min_freq, max_freq),
@@ -243,8 +204,7 @@ class ICEYEDetails(object):
                 RcvChannels=[ChanParametersType(TxRcvPolarization=polarization,
                                                 index=1)])
 
-        def get_image_formation():
-            # type: () -> ImageFormationType
+        def get_image_formation() -> ImageFormationType:
             return ImageFormationType(
                 TxRcvPolarizationProc=polarization,
                 ImageFormAlgo='RMA',
@@ -257,11 +217,10 @@ class ICEYEDetails(object):
                 RgAutofocus='NO',
                 RcvChanProc=RcvChanProcType(NumChanProc=1, PRFScaleFactor=1, ChanIndices=[1, ]),)
 
-        def get_radiometric():
-            # type: () -> RadiometricType
-            return RadiometricType(BetaZeroSFPoly=[[float(hf['calibration_factor'][()]), ],])
+        def get_radiometric() -> RadiometricType:
+            return RadiometricType(BetaZeroSFPoly=[[float(hf['calibration_factor'][()]), ], ])
 
-        def calculate_drate_sf_poly():
+        def calculate_drate_sf_poly() -> (numpy.ndarray, numpy.ndarray):
             r_ca_coeffs = numpy.array([r_ca_scp, 1], dtype='float64')
             dop_rate_coeffs = hf['doppler_rate_coeffs'][:]
             # Prior to ICEYE 1.14 processor, absolute value of Doppler rate was
@@ -273,60 +232,78 @@ class ICEYEDetails(object):
             t_drate_ca_poly = dop_rate_poly.shift(
                 t_0=zd_ref_time - rg_time_scp,
                 alpha=2/speed_of_light, return_poly=False)
-            return t_drate_ca_poly, -polynomial.polymul(t_drate_ca_poly, r_ca_coeffs)*speed_of_light/(2*center_freq*vm_ca_sq)
+            return t_drate_ca_poly, \
+                -polynomial.polymul(t_drate_ca_poly, r_ca_coeffs)*speed_of_light/(2*center_freq*vm_ca_sq)
 
-        def calculate_doppler_polys():
-            # extract doppler centroid coefficients
-            dc_estimate_coeffs = hf['dc_estimate_coeffs'][:]
-            dc_time_str = hf['dc_estimate_time_utc'][:, 0]
-            dc_zd_times = numpy.zeros((dc_time_str.shape[0], ), dtype='float64')
-            for i, entry in enumerate(dc_time_str):
-                dc_zd_times[i] = get_seconds(_parse_time(entry), start_time, precision='us')
-            # create a sampled doppler centroid
-            samples = 49  # copied from corresponding matlab, we just need enough for appropriate refitting
-            # create doppler time samples
-            diff_time_rg = first_pixel_time - zd_ref_time + \
-                           numpy.linspace(0, number_of_range_samples/range_sampling_rate, samples)
-            # doppler centroid samples definition
-            dc_sample_array = numpy.zeros((samples, dc_zd_times.size), dtype='float64')
-            for i, coeffs in enumerate(dc_estimate_coeffs):
-                dc_sample_array[:, i] = polynomial.polyval(diff_time_rg, coeffs)
-            # create arrays for range/azimuth from scp in meters
-            azimuth_scp_m, range_scp_m = numpy.meshgrid(
-                col_ss*(dc_zd_times - zd_time_scp)/ss_zd_s,
-                (diff_time_rg + zd_ref_time - rg_time_scp)*speed_of_light/2)
-
-            # fit the doppler centroid sample array
-            x_order = min(3, range_scp_m.shape[0]-1)
-            y_order = min(3, range_scp_m.shape[1]-1)
-
-            t_dop_centroid_poly, residuals, rank, sing_values = two_dim_poly_fit(
-                range_scp_m, azimuth_scp_m, dc_sample_array, x_order=x_order, y_order=y_order,
-                x_scale=1e-3, y_scale=1e-3, rcond=1e-40)
-            logger.info(
-                'The dop_centroid_poly fit details:\n\troot mean square '
-                'residuals = {}\n\trank = {}\n\tsingular values = {}'.format(
-                    residuals, rank, sing_values))
-
+        def calculate_doppler_polys() -> (numpy.ndarray, numpy.ndarray):
             # define and fit the time coa array
-            doppler_rate_sampled = polynomial.polyval(azimuth_scp_m, drate_ca_poly)
-            time_coa = dc_zd_times + dc_sample_array/doppler_rate_sampled
-            t_time_coa_poly, residuals, rank, sing_values = two_dim_poly_fit(
-                range_scp_m, azimuth_scp_m, time_coa, x_order=x_order, y_order=y_order,
-                x_scale=1e-3, y_scale=1e-3, rcond=1e-40)
-            logger.info(
-                'The time_coa_poly fit details:\n\troot mean square '
-                'residuals = {}\n\trank = {}\n\tsingular values = {}'.format(
-                    residuals, rank, sing_values))
-            return t_dop_centroid_poly, t_time_coa_poly
+            if collect_info.RadarMode.ModeType == 'SPOTLIGHT':
+                coa_time = duration / 2
+                look = 1 if look_side == 'left' else -1
+                alpha = 2.0/speed_of_light
+                pos = position.ARPPoly(coa_time)
+                vel = position.ARPPoly.derivative_eval(coa_time)
+                speed = numpy.linalg.norm(vel)
+                vel_hat = vel / speed
+                los = geo_data.SCP.ECF.get_array() - pos
 
-        def get_rma():
-            # type: () -> RMAType
-            dop_centroid_poly = Poly2DType(Coefs=dop_centroid_poly_coeffs)
-            dop_centroid_coa = True
+                t_time_coa_coeffs = [[coa_time, ], ]
+                t_dop_centroid_coeffs = numpy.zeros((2, 2), dtype=numpy.float64)
+                t_dop_centroid_coeffs[0, 1] = -look*center_freq*alpha*speed/r_ca_scp
+                t_dop_centroid_coeffs[1, 1] = look*center_freq*alpha*speed/(r_ca_scp**2)
+                t_dop_centroid_coeffs[:, 0] = -look*(t_dop_centroid_coeffs[:, 1]*numpy.dot(los, vel_hat))
+            else:
+                # extract doppler centroid coefficients
+                dc_estimate_coeffs = hf['dc_estimate_coeffs'][:]
+                dc_time_str = hf['dc_estimate_time_utc'][:, 0]
+                dc_zd_times = numpy.zeros((dc_time_str.shape[0], ), dtype='float64')
+                for i, entry in enumerate(dc_time_str):
+                    dc_zd_times[i] = get_seconds(_parse_time(entry), start_time, precision='us')
+                # create a sampled doppler centroid
+                samples = 49  # copied from corresponding matlab, we just need enough for appropriate refitting
+                # create doppler time samples
+                diff_time_rg = first_pixel_time - zd_ref_time + \
+                    numpy.linspace(0, number_of_range_samples/range_sampling_rate, samples)
+                # doppler centroid samples definition
+                dc_sample_array = numpy.zeros((samples, dc_zd_times.size), dtype='float64')
+                for i, coeffs in enumerate(dc_estimate_coeffs):
+                    dc_sample_array[:, i] = polynomial.polyval(diff_time_rg, coeffs)
+                # create arrays for range/azimuth from scp in meters
+                azimuth_scp_m, range_scp_m = numpy.meshgrid(
+                    col_ss*(dc_zd_times - zd_time_scp)/ss_zd_s,
+                    (diff_time_rg + zd_ref_time - rg_time_scp)*speed_of_light/2)
+
+                # fit the doppler centroid sample array
+                x_order = min(3, range_scp_m.shape[0]-1)
+                y_order = min(3, range_scp_m.shape[1]-1)
+
+                t_dop_centroid_coeffs, residuals, rank, sing_values = two_dim_poly_fit(
+                    range_scp_m, azimuth_scp_m, dc_sample_array, x_order=x_order, y_order=y_order,
+                    x_scale=1e-3, y_scale=1e-3, rcond=1e-40)
+                logger.info(
+                    'The dop_centroid_poly fit details:\n\troot mean square '
+                    'residuals = {}\n\trank = {}\n\tsingular values = {}'.format(
+                        residuals, rank, sing_values))
+
+                doppler_rate_sampled = polynomial.polyval(azimuth_scp_m, drate_ca_poly)
+                time_coa = dc_zd_times + dc_sample_array/doppler_rate_sampled
+                t_time_coa_coeffs, residuals, rank, sing_values = two_dim_poly_fit(
+                    range_scp_m, azimuth_scp_m, time_coa, x_order=x_order, y_order=y_order,
+                    x_scale=1e-3, y_scale=1e-3, rcond=1e-40)
+                logger.info(
+                    'The time_coa_poly fit details:\n\troot mean square '
+                    'residuals = {}\n\trank = {}\n\tsingular values = {}'.format(
+                        residuals, rank, sing_values))
+
+            return t_dop_centroid_coeffs, t_time_coa_coeffs
+
+        def get_rma() -> RMAType:
             if collect_info.RadarMode.ModeType == 'SPOTLIGHT':
                 dop_centroid_poly = None
                 dop_centroid_coa = None
+            else:
+                dop_centroid_poly = Poly2DType(Coefs=dop_centroid_poly_coeffs)
+                dop_centroid_coa = True
             # NB: DRateSFPoly is defined as a function of only range - reshape appropriately
             inca = INCAType(
                 R_CA_SCP=r_ca_scp,
@@ -339,11 +316,8 @@ class ICEYEDetails(object):
                 RMAlgoType='OMEGA_K',
                 INCA=inca)
 
-        def get_grid():
-            # type: () -> GridType
+        def get_grid() -> GridType:
             time_coa_poly = Poly2DType(Coefs=time_coa_poly_coeffs)
-            if collect_info.RadarMode.ModeType == 'SPOTLIGHT':
-                time_coa_poly = Poly2DType(Coefs=[[float(time_coa_poly_coeffs[0, 0]), ], ])
 
             row_win = _stringify(hf['window_function_range'][()])
             if row_win == 'NONE':
@@ -353,7 +327,7 @@ class ICEYEDetails(object):
                 Sgn=-1,
                 KCtr=2*center_freq/speed_of_light,
                 ImpRespBW=2*tx_bandwidth/speed_of_light,
-                DeltaKCOAPoly=Poly2DType(Coefs=[[0,]]),
+                DeltaKCOAPoly=Poly2DType(Coefs=[[0, ], ]),
                 WgtType=WgtTypeType(WindowName=row_win))
             col_win = _stringify(hf['window_function_azimuth'][()])
             if col_win == 'NONE':
@@ -372,7 +346,7 @@ class ICEYEDetails(object):
                 Row=row,
                 Col=col)
 
-        def correct_scp():
+        def correct_scp() -> None:
             scp_pixel = sicd.ImageData.SCPPixel.get_array()
             scp_ecf = sicd.project_image_to_ground(scp_pixel, projection_type='HAE')
             sicd.update_scp(scp_ecf, coord_system='ECF')
@@ -423,7 +397,7 @@ class ICEYEDetails(object):
                 zero_doppler_left = _parse_time(hf['zerodoppler_start_utc'][()])
             dop_bw = hf['total_processed_bandwidth_azimuth'][()]
             zd_time_scp = get_seconds(zero_doppler_left, start_time, precision='us') + \
-                          image_data.SCPPixel.Col*ss_zd_s
+                image_data.SCPPixel.Col*ss_zd_s
             zd_ref_time = first_pixel_time + number_of_range_samples/(2*range_sampling_rate)
             vel_scp = position.ARPPoly.derivative_eval(zd_time_scp, der_order=1)
             vm_ca_sq = numpy.sum(vel_scp*vel_scp)
@@ -460,65 +434,34 @@ class ICEYEDetails(object):
         # derive sicd fields
         sicd.derive()
         # TODO: RNIIRS?
-        data_size = (image_data.NumCols, image_data.NumRows)
-        symmetry = (True, False, True) if look_side == 'left' else (False, False, True)
-        return sicd, data_size, symmetry
+
+        reverse_axes = (0, ) if look_side == 'left' else None
+        transpose_axes = (1, 0)
+        # noinspection PyTypeChecker
+        return sicd, reverse_axes, transpose_axes
 
 
-class ICEYEChipper(BaseChipper):
-    __slots__ = ('_file_name', '_real_group', '_imaginary_group')
-
-    def __init__(self, file_name, data_size, symmetry, transform_data='COMPLEX', real_group='s_i', imaginary_group='s_q'):
-        self._file_name = file_name
-        self._real_group = real_group
-        self._imaginary_group = imaginary_group
-        super(ICEYEChipper, self).__init__(data_size, symmetry=symmetry, transform_data=transform_data)
-
-    def _read_raw_fun(self, range1, range2):
-        def validate_gp(gp, name):
-            if not isinstance(gp, h5py.Dataset):
-                raise ValueError(
-                    'hdf5 group {} is expected to be a dataset, got type {}'.format(name, type(gp)))
-            if len(gp.shape) != 2:
-                raise ValueError('Dataset {} has unexpected shape {}'.format(name, gp.shape))
-
-        def reorder(tr):
-            if tr[2] > 0:
-                return tr, False
-            else:
-                if tr[1] == -1 and tr[2] < 0:
-                    return (0, tr[0]+1, -tr[2]), True
-                else:
-                    return (tr[1], tr[0], -tr[2]), True
-
-        r1, r2 = self._reorder_arguments(range1, range2)
-        r1, rev1 = reorder(r1)
-        r2, rev2 = reorder(r2)
-        with h5py.File(self._file_name, 'r') as hf:
-            real_gp = hf[self._real_group]
-            imag_gp = hf[self._imaginary_group]
-            validate_gp(real_gp, self._real_group)
-            validate_gp(imag_gp, self._imaginary_group)
-
-            real_data = real_gp[r1[0]:r1[1]:r1[2], r2[0]:r2[1]:r2[2]]
-            data = numpy.zeros((real_data.shape[0], real_data.shape[1], 2), dtype=real_data.dtype)
-            data[:, :, 0] = real_data
-            del real_data
-            data[:, :, 1] = imag_gp[r1[0]:r1[1]:r1[2], r2[0]:r2[1]:r2[2]]
-
-        if rev1 and rev2:
-            return data[::-1, ::-1]
-        elif rev1:
-            return data[::-1, :]
-        elif rev2:
-            return data[:, ::-1]
-        else:
-            return data
+def get_iceye_data_segment(
+        file_name: str,
+        reverse_axes: Union[None, int, Sequence[int]],
+        transpose_axes: Union[None, Tuple[int, ...]],
+        real_group: str = 's_i',
+        imaginary_grop: str = 's_q') -> BandAggregateSegment:
+    real_dataset = HDF5DatasetSegment(
+        file_name, real_group, reverse_axes=reverse_axes, transpose_axes=transpose_axes, close_file=True)
+    imag_dataset = HDF5DatasetSegment(
+        file_name, imaginary_grop, reverse_axes=reverse_axes, transpose_axes=transpose_axes, close_file=True)
+    return BandAggregateSegment(
+        (real_dataset, imag_dataset), band_dimension=2,
+        formatted_dtype='complex64', formatted_shape=real_dataset.formatted_shape,
+        format_function=ComplexFormatFunction(real_dataset.formatted_dtype, order='IQ', band_dimension=-1))
 
 
-class ICEYEReader(BaseReader, SICDTypeReader):
+class ICEYEReader(SICDTypeReader):
     """
-    Gets a reader type object for Cosmo Skymed files
+    An ICEYE SLC reader implementation.
+
+    **Changed in version 1.3.0** for reading changes.
     """
 
     __slots__ = ('_iceye_details', )
@@ -538,16 +481,14 @@ class ICEYEReader(BaseReader, SICDTypeReader):
             raise TypeError('The input argument for a ICEYEReader must be a '
                             'filename or ICEYEDetails object')
         self._iceye_details = iceye_details
-        sicd, data_size, symmetry = iceye_details.get_sicd()
-        chipper = ICEYEChipper(iceye_details.file_name, data_size, symmetry)
+        sicd, reverse_axes, transpose_axes = iceye_details.get_sicd()
+        data_segment = get_iceye_data_segment(iceye_details.file_name, reverse_axes, transpose_axes)
 
-        SICDTypeReader.__init__(self, sicd)
-        BaseReader.__init__(self, chipper, reader_type="SICD")
+        SICDTypeReader.__init__(self, data_segment, sicd, close_segments=True)
         self._check_sizes()
 
     @property
-    def iceye_details(self):
-        # type: () -> ICEYEDetails
+    def iceye_details(self) -> ICEYEDetails:
         """
         ICEYEDetails: The ICEYE details object.
         """
@@ -557,3 +498,38 @@ class ICEYEReader(BaseReader, SICDTypeReader):
     @property
     def file_name(self):
         return self.iceye_details.file_name
+
+
+########
+# base expected functionality for a module with an implemented Reader
+
+def is_a(file_name: str) -> Union[None, ICEYEReader]:
+    """
+    Tests whether a given file_name corresponds to a ICEYE file. Returns a reader instance, if so.
+
+    Parameters
+    ----------
+    file_name : str|BinaryIO
+        the file_name to check
+
+    Returns
+    -------
+    None|ICEYEReader
+        `ICEYEReader` instance if ICEYE file, `None` otherwise
+    """
+
+    if is_file_like(file_name):
+        return None
+
+    if not is_hdf5(file_name):
+        return None
+
+    if h5py is None:
+        return None
+
+    try:
+        iceye_details = ICEYEDetails(file_name)
+        logger.info('File {} is determined to be a ICEYE file.'.format(file_name))
+        return ICEYEReader(iceye_details)
+    except SarpyIOError:
+        return None

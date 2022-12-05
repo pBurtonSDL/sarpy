@@ -5,6 +5,7 @@ The AntennaType definition.
 __classification__ = "UNCLASSIFIED"
 __author__ = "Thomas McCullough"
 
+from typing import Union, Optional
 
 import numpy
 
@@ -33,13 +34,17 @@ class EBType(Serializable):
         docstring='Electrical boresight steering *Y-axis direction cosine (DCY)* as a function of '
                   'slow time ``(variable 1)``.')  # type: Poly1DType
 
-    def __init__(self, DCXPoly=None, DCYPoly=None, **kwargs):
+    def __init__(
+            self,
+            DCXPoly: Union[Poly1DType, numpy.ndarray, list, tuple] = None,
+            DCYPoly: Union[Poly1DType, numpy.ndarray, list, tuple] = None,
+            **kwargs):
         """
         Parameters
         ----------
         DCXPoly : Poly1DType|numpy.ndarray|list|tuple
         DCYPoly : Poly1DType|numpy.ndarray|list|tuple
-        kwargs : dict
+        kwargs
         """
 
         if '_xml_ns' in kwargs:
@@ -50,7 +55,9 @@ class EBType(Serializable):
         self.DCYPoly = DCYPoly
         super(EBType, self).__init__(**kwargs)
 
-    def __call__(self, t):
+    def __call__(
+            self,
+            t: Union[float, int, numpy.ndarray]):
         """
         Evaluate the polynomial at points `t`. This passes `t` straight through
         to :func:`polyval` of `numpy.polynomial.polynomial` for each of
@@ -92,7 +99,7 @@ class AntParamType(Serializable):
     )  # type: XYZPolyType
     FreqZero = FloatDescriptor(
         'FreqZero', _required, strict=DEFAULT_STRICT,
-        docstring='RF frequency *(f0)* used to specify the array pattern and electrical boresite *(EB)* '
+        docstring='RF frequency *(f0)* used to specify the array pattern and electrical boresight *(EB)* '
                   'steering direction cosines.')  # type: float
     EB = SerializableDescriptor(
         'EB', EBType, _required, strict=DEFAULT_STRICT,
@@ -130,8 +137,18 @@ class AntParamType(Serializable):
         
         """)  # type: bool
 
-    def __init__(self, XAxisPoly=None, YAxisPoly=None, FreqZero=None, EB=None,
-                 Array=None, Elem=None, GainBSPoly=None, EBFreqShift=None, MLFreqDilation=None, **kwargs):
+    def __init__(
+            self,
+            XAxisPoly: XYZPolyType = None,
+            YAxisPoly: XYZPolyType =None,
+            FreqZero: float = None,
+            EB: Optional[EBType] = None,
+            Array: GainPhasePolyType = None,
+            Elem: Optional[GainPhasePolyType] = None,
+            GainBSPoly: Union[None, Poly1DType, numpy.ndarray, list, tuple] = None,
+            EBFreqShift: Optional[bool] = None,
+            MLFreqDilation: Optional[bool] = None,
+            **kwargs):
         """
         Parameters
         ----------
@@ -144,7 +161,7 @@ class AntParamType(Serializable):
         GainBSPoly : Poly1DType|numpy.ndarray|list|tuple
         EBFreqShift : bool
         MLFreqDilation : bool
-        kwargs : dict
+        kwargs
         """
 
         if '_xml_ns' in kwargs:
@@ -179,7 +196,12 @@ class AntennaType(Serializable):
         'TwoWay', AntParamType, _required, strict=DEFAULT_STRICT,
         docstring='The bidirectional transmit/receive antenna parameters.')  # type: AntParamType
 
-    def __init__(self, Tx=None, Rcv=None, TwoWay=None, **kwargs):
+    def __init__(
+            self,
+            Tx: Optional[AntParamType] = None,
+            Rcv: Optional[AntParamType] = None,
+            TwoWay: Optional[AntParamType] = None,
+            **kwargs):
         """
 
         Parameters
@@ -187,7 +209,7 @@ class AntennaType(Serializable):
         Tx : AntParamType
         Rcv : AntParamType
         TwoWay : AntParamType
-        kwargs : dict
+        kwargs
         """
 
         if '_xml_ns' in kwargs:

@@ -6,11 +6,14 @@ __classification__ = "UNCLASSIFIED"
 __author__ = "Thomas McCullough"
 
 
+from typing import Optional, Tuple
 import numpy
 from sarpy.io.general.utils import get_seconds
 
 
-def _get_center_frequency(RadarCollection, ImageFormation):
+def _get_center_frequency(
+        RadarCollection,
+        ImageFormation) -> Optional[float]:
     """
     Helper method.
 
@@ -27,15 +30,14 @@ def _get_center_frequency(RadarCollection, ImageFormation):
 
     if RadarCollection is None or RadarCollection.RefFreqIndex is None or RadarCollection.RefFreqIndex == 0:
         return None
-    if ImageFormation is None or ImageFormation.TxFrequencyProc is None or \
-            ImageFormation.TxFrequencyProc.MinProc is None or ImageFormation.TxFrequencyProc.MaxProc is None:
+    if ImageFormation is None or ImageFormation.TxFrequencyProc is None:
         return None
-    return 0.5 * (ImageFormation.TxFrequencyProc.MinProc + ImageFormation.TxFrequencyProc.MaxProc)
+    return ImageFormation.TxFrequencyProc.center_frequency
 
 
-def is_polstring_version1(str_in):
+def polstring_version_required(str_in: Optional[str]) -> Tuple[int, int, int]:
     """
-    Is the polarization string compatible for SCD version 1.1?
+    What SICD version does the pol string require?
 
     Parameters
     ----------
@@ -44,26 +46,31 @@ def is_polstring_version1(str_in):
 
     Returns
     -------
-    bool
+    tuple
+        One of `(1, 1, 0)`, `(1, 2, 1)`, `(1, 3, 0)`
     """
 
     if str_in is None or str_in in ['OTHER', 'UNKNOWN']:
-        return True
+        return (1, 1, 0)
 
     parts = str_in.split(':')
     if len(parts) != 2:
-        return False
+        return (1, 1, 0)
 
     part1, part2 = parts
-    if (part1 in ['V', 'H'] and part2 in ['RHC', 'LHC']) or (part2 in ['V', 'H'] and part1 in ['RHC', 'LHC']):
-        return False
-    return True
+    if part1 in ['S', 'E', 'X', 'Y', 'OTHER'] or part2 in ['S', 'E', 'X', 'Y', 'OTHER']:
+        return (1, 3, 0)
+    elif (part1 in ['V', 'H'] and part2 in ['RHC', 'LHC']) or \
+            (part2 in ['V', 'H'] and part1 in ['RHC', 'LHC']):
+        return (1, 2, 1)
+    else:
+        return (1, 1, 0)
 
 
 ################
-# SICD comparsion and matching methods
+# SICD comparison and matching methods
 
-def is_same_size(sicd1, sicd2):
+def is_same_size(sicd1, sicd2) -> bool:
     """
     Are the two SICD structures the same size in pixels?
 
@@ -87,7 +94,7 @@ def is_same_size(sicd1, sicd2):
         return False
 
 
-def is_same_sensor(sicd1, sicd2):
+def is_same_sensor(sicd1, sicd2) -> bool:
     """
     Are the two SICD structures from the same sensor?
 
@@ -110,7 +117,7 @@ def is_same_sensor(sicd1, sicd2):
         return False
 
 
-def is_same_start_time(sicd1, sicd2):
+def is_same_start_time(sicd1, sicd2) -> bool:
     """
     Do the two SICD structures have the same start time with millisecond resolution?
 
@@ -133,7 +140,7 @@ def is_same_start_time(sicd1, sicd2):
         return False
 
 
-def is_same_duration(sicd1, sicd2):
+def is_same_duration(sicd1, sicd2) -> bool:
     """
     Do the two SICD structures have the same duration, with millisecond resolution?
 
@@ -156,7 +163,7 @@ def is_same_duration(sicd1, sicd2):
         return False
 
 
-def is_same_band(sicd1, sicd2):
+def is_same_band(sicd1, sicd2) -> bool:
     """
     Are the two SICD structures the same band?
 
@@ -179,7 +186,7 @@ def is_same_band(sicd1, sicd2):
         return False
 
 
-def is_same_scp(sicd1, sicd2):
+def is_same_scp(sicd1, sicd2) -> bool:
     """
     Do the two SICD structures share the same SCP, with resolution of one meter
     in each ECF coordinate?
@@ -205,7 +212,7 @@ def is_same_scp(sicd1, sicd2):
         return False
 
 
-def is_general_match(sicd1, sicd2):
+def is_general_match(sicd1, sicd2) -> bool:
     """
     Do the two SICD structures seem to form a basic match? This necessarily
     establishes and equivalence relation between sicds.
@@ -224,5 +231,5 @@ def is_general_match(sicd1, sicd2):
         return True
 
     return is_same_size(sicd1, sicd2) and is_same_sensor(sicd1, sicd2) and \
-           is_same_start_time(sicd1, sicd2) and is_same_duration(sicd1, sicd2) and \
-           is_same_band(sicd1, sicd2) and is_same_scp(sicd1, sicd2)
+        is_same_start_time(sicd1, sicd2) and is_same_duration(sicd1, sicd2) and \
+        is_same_band(sicd1, sicd2) and is_same_scp(sicd1, sicd2)

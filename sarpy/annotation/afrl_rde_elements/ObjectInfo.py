@@ -139,7 +139,7 @@ class SizeType(Serializable, Arrayable):
         Length : float
         Width : float
         Height : float
-        kwargs : dict
+        kwargs
         """
 
         if '_xml_ns' in kwargs:
@@ -223,7 +223,7 @@ class OrientationType(Serializable):
         Pitch : float
         Yaw : float
         AzimuthAngle : float
-        kwargs : dict
+        kwargs
         """
 
         if '_xml_ns' in kwargs:
@@ -926,7 +926,7 @@ class TheObjectType(Serializable):
         else:
             max_size = self.Size.get_max_diameter()
             if max_size == 0:
-                max_size = 10.0  # todo: fix this...
+                max_size = 10.0
             row_size = max_size/sicd.Grid.Row.SS
             col_size = max_size/sicd.Grid.Col.SS
         # check bounding information
@@ -1055,8 +1055,8 @@ class TheObjectType(Serializable):
             layover_angle = 0.0
         else:
             layover_angle = numpy.deg2rad(sicd.SCPCOA.LayoverAng - sicd.SCPCOA.AzimAng)
-        layover_vector = layover_size*numpy.array(
-            [numpy.cos(layover_angle)/sicd.Grid.Row.SS, numpy.sin(layover_angle)/sicd.Grid.Col.SS])
+        layover_vector = -layover_size*numpy.array(
+            [numpy.cos(layover_angle)/sicd.Grid.Row.SS, -numpy.sin(layover_angle)/sicd.Grid.Col.SS])
 
         # craft the layover box
         if layover_shift:
@@ -1098,7 +1098,7 @@ class TheObjectType(Serializable):
         shadow_angle = sicd.SCPCOA.Shadow
         shadow_angle = numpy.pi if shadow_angle is None else numpy.deg2rad(shadow_angle)
         shadow_vector = -shadow_size*numpy.array(
-            [numpy.cos(shadow_angle)/sicd.Grid.Row.SS, numpy.sin(shadow_angle)/sicd.Grid.Col.SS])
+            [numpy.cos(shadow_angle)/sicd.Grid.Row.SS, -numpy.sin(shadow_angle)/sicd.Grid.Col.SS])
         shadow_box = pixel_box + shadow_vector
 
         min_rows = min(min_rows, numpy.min(shadow_box[:, 0]))
@@ -1241,7 +1241,7 @@ class ObjectInfoType(Serializable):
         super(ObjectInfoType, self).__init__(**kwargs)
 
     def set_image_location_from_sicd(
-            self, sicd, layover_shift=True, populate_in_periphery=False,
+            self, sicd, layover_shift=False, populate_in_periphery=False,
             include_out_of_range=False, padding_fraction=None, minimum_pad=None):
         """
         Set the image location information with respect to the given SICD,

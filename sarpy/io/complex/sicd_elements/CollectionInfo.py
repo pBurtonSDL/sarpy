@@ -6,7 +6,7 @@ __classification__ = "UNCLASSIFIED"
 __author__ = "Thomas McCullough"
 
 
-from typing import List
+from typing import List, Union, Dict, Optional
 
 from sarpy.io.xml.base import Serializable, ParametersCollection
 from sarpy.io.xml.descriptors import StringDescriptor, StringEnumDescriptor, \
@@ -22,7 +22,7 @@ class RadarModeType(Serializable):
     _fields = ('ModeType', 'ModeID')
     _required = ('ModeType', )
     # other class variable
-    _MODE_TYPE_VALUES = ('SPOTLIGHT', 'STRIPMAP', 'DYNAMIC STRIPMAP', 'SCANSAR')
+    _MODE_TYPE_VALUES = ('SPOTLIGHT', 'STRIPMAP', 'DYNAMIC STRIPMAP')
     # descriptors
     ModeType = StringEnumDescriptor(
         'ModeType', _MODE_TYPE_VALUES, _required, strict=True,
@@ -31,24 +31,29 @@ class RadarModeType(Serializable):
         'ModeID', _required, strict=DEFAULT_STRICT,
         docstring='Radar imaging mode per Program Specific Implementation Document.')  # type: str
 
-    def __init__(self, ModeID=None, ModeType=None, **kwargs):
+    def __init__(
+            self,
+            ModeType: str = None,
+            ModeID: Optional[str] = None,
+            **kwargs):
         """
 
         Parameters
         ----------
-        ModeID : str
         ModeType : str
-        kwargs : dict
+        ModeID : None|str
+        kwargs
         """
 
         if '_xml_ns' in kwargs:
             self._xml_ns = kwargs['_xml_ns']
         if '_xml_ns_key' in kwargs:
             self._xml_ns_key = kwargs['_xml_ns_key']
-        self.ModeID, self.ModeType = ModeID, ModeType
+        self.ModeID = ModeID
+        self.ModeType = ModeType
         super(RadarModeType, self).__init__(**kwargs)
 
-    def get_mode_abbreviation(self):
+    def get_mode_abbreviation(self) -> str:
         """
         Get the mode abbreviation for the suggested name.
 
@@ -115,8 +120,17 @@ class CollectionInfoType(Serializable):
         'Parameters', _collections_tags, _required, strict=DEFAULT_STRICT,
         docstring='Free form parameters object collection.')  # type: ParametersCollection
 
-    def __init__(self, CollectorName=None, IlluminatorName=None, CoreName=None, CollectType=None,
-                 RadarMode=None, Classification="UNCLASSIFIED", CountryCodes=None, Parameters=None, **kwargs):
+    def __init__(
+            self,
+            CollectorName: str = None,
+            IlluminatorName: Optional[str] = None,
+            CoreName: str = None,
+            CollectType: Optional[str] = None,
+            RadarMode: RadarModeType = None,
+            Classification: str = "UNCLASSIFIED",
+            CountryCodes: Union[str, List[str]] = None,
+            Parameters: Union[ParametersCollection, Dict] = None,
+            **kwargs):
         """
 
         Parameters
@@ -129,16 +143,19 @@ class CollectionInfoType(Serializable):
         Classification : str
         CountryCodes : list|str
         Parameters : ParametersCollection|dict
-        kwargs : dict
+        kwargs
         """
 
         if '_xml_ns' in kwargs:
             self._xml_ns = kwargs['_xml_ns']
         if '_xml_ns_key' in kwargs:
             self._xml_ns_key = kwargs['_xml_ns_key']
-        self.CollectorName, self.IlluminatorName = CollectorName, IlluminatorName
-        self.CoreName, self.CollectType = CoreName, CollectType
+        self.CollectorName = CollectorName
+        self.IlluminatorName = IlluminatorName
+        self.CoreName = CoreName
+        self.CollectType = CollectType
         self.RadarMode = RadarMode
         self.Classification = Classification
-        self.CountryCodes, self.Parameters = CountryCodes, Parameters
+        self.CountryCodes = CountryCodes
+        self.Parameters = Parameters
         super(CollectionInfoType, self).__init__(**kwargs)

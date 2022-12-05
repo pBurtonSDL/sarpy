@@ -7,7 +7,7 @@ __author__ = "Thomas McCullough"
 
 
 from xml.etree import ElementTree
-from typing import List
+from typing import List, Union, Dict, Optional
 
 from sarpy.io.xml.base import Serializable, ParametersCollection, \
     get_node_value, find_first_child, find_children
@@ -34,7 +34,12 @@ class MatchCollectionType(Serializable):
         'Parameters', _collections_tags, _required, strict=DEFAULT_STRICT,
         docstring='The match parameters.')  # type: ParametersCollection
 
-    def __init__(self, CoreName=None, MatchIndex=None, Parameters=None, **kwargs):
+    def __init__(
+            self,
+            CoreName: str = None,
+            MatchIndex: Optional[int] = None,
+            Parameters: Union[None, ParametersCollection, Dict] = None,
+            **kwargs):
         """
 
         Parameters
@@ -42,7 +47,7 @@ class MatchCollectionType(Serializable):
         CoreName : str
         MatchIndex : int
         Parameters : ParametersCollection|dict
-        kwargs : dict
+        kwargs
         """
 
         if '_xml_ns' in kwargs:
@@ -68,20 +73,25 @@ class MatchType(Serializable):
         'CurrentIndex', _required, strict=DEFAULT_STRICT,
         docstring='Collection sequence index for the current collection. That is, which collection in the '
                   'collection series (defined in MatchCollections) is this collection? '
-                  '(1-based enumeration).')  # type: int
+                  '(1-based enumeration).')  # type: Optional[int]
     MatchCollections = SerializableListDescriptor(
         'MatchCollections', MatchCollectionType, _collections_tags, _required, strict=DEFAULT_STRICT,
-        docstring='The match collections.')  # type: List[MatchCollectionType]
+        docstring='The match collections.')  # type: Optional[List[MatchCollectionType]]
 
-    def __init__(self, TypeID=None, CurrentIndex=None, MatchCollections=None, **kwargs):
+    def __init__(
+            self,
+            TypeID: str = None,
+            CurrentIndex: Optional[int] = None,
+            MatchCollections: Optional[List[MatchCollectionType]] = None,
+            **kwargs):
         """
 
         Parameters
         ----------
         TypeID : str
-        CurrentIndex : int
-        MatchCollections : List[MatchCollectionType]
-        kwargs : dict
+        CurrentIndex : None|int
+        MatchCollections : None|List[MatchCollectionType]
+        kwargs
         """
 
         if '_xml_ns' in kwargs:
@@ -115,13 +125,16 @@ class MatchInfoType(Serializable):
         'MatchTypes', MatchType, _collections_tags, _required, strict=DEFAULT_STRICT,
         docstring='The match types list.')  # type: List[MatchType]
 
-    def __init__(self, MatchTypes=None, **kwargs):
+    def __init__(
+            self,
+            MatchTypes: List[MatchType] = None,
+            **kwargs):
         """
 
         Parameters
         ----------
         MatchTypes : List[MatchType]
-        kwargs : dict
+        kwargs
         """
 
         if '_xml_ns' in kwargs:
@@ -132,7 +145,7 @@ class MatchInfoType(Serializable):
         super(MatchInfoType, self).__init__(**kwargs)
 
     @property
-    def NumMatchTypes(self):
+    def NumMatchTypes(self) -> int:
         """int: The number of types of matched collections."""
         if self.MatchTypes is None:
             return 0

@@ -2,13 +2,11 @@ Processing elements (sarpy.processing)
 ======================================
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
     :caption: Contents:
 
-    csi
-    normalize_sicd
-    subaperture
+    rational_polynomial
+    sicd/index
+    sidd/index
     ortho_rectify
-    rgiqe
-    windows
-    fft_base
+    registration/index

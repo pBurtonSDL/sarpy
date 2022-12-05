@@ -107,7 +107,7 @@ class ColorDisplayRemapType(Serializable, Arrayable):
 
     def get_array(self, dtype=numpy.uint8):
         """
-        Gets **a copy** of the coefficent array of specified data type.
+        Gets **a copy** of the coefficient array of specified data type.
 
         Parameters
         ----------
@@ -362,7 +362,7 @@ class MonitorCompensationAppliedType(Serializable):
 
 class DRAHistogramOverridesType(Serializable):
     """
-    Dynamic range adjustment overide parameters.
+    Dynamic range adjustment override parameters.
     """
     _fields = ('ClipMin', 'ClipMax')
     _required = ('ClipMin', 'ClipMax')
@@ -464,3 +464,25 @@ class ProductDisplayType(Serializable):
         self.MonitorCompensationApplied = MonitorCompensationApplied
         self.DisplayExtensions = DisplayExtensions
         super(ProductDisplayType, self).__init__(**kwargs)
+
+    def get_pixel_size(self) -> int:
+        """
+        Gets the raw size per pixel, in bytes.
+
+        Returns
+        -------
+        int
+        """
+
+        if self.PixelType == 'MONO8I':
+            return 1
+        elif self.PixelType == 'MONO8LU':
+            return 1
+        elif self.PixelType == 'MONO16I':
+            return 2
+        elif self.PixelType == 'RGB8LU':
+            return 1
+        elif self.PixelType == 'RGB24I':
+            return 3
+        else:
+            raise ValueError('Got unhandled pixel type `{}`'.format(self.PixelType))

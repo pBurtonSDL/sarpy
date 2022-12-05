@@ -16,24 +16,30 @@ Relevant Standards Documents
 A variety of SAR format standard are mentioned throughout this ReadMe, here are 
 associated references. 
 
-Sensor Independent Complex Data (SICD) latest version (1.2.1, 2018-12-13) 
-1. [Volume 1, Design & Implementation Description Document](https://nsgreg.nga.mil/doc/view?i=4900)
-2. [Volume 2, File Format Description Document](https://nsgreg.nga.mil/doc/view?i=4901)
-3. [Volume 3, Image Projections Description Document](https://nsgreg.nga.mil/doc/view?i=4902)
-4. [Schema](https://nsgreg.nga.mil/doc/view?i=5230)
+*Sensor Independent Complex Data (SICD)* - latest version (1.3.0; 2021-11-30)
 
-Sensor Independent Derived Data (SIDD) latest version (2.0, 2019-05-31)
-1. [Volume 1, Design and Implementation Description Document](https://nsgreg.nga.mil/doc/view?i=5009)
-2. [Volume 2, NITF File Format Description Document](https://nsgreg.nga.mil/doc/view?i=5016)
-3. [Volume 3, GeoTIFF File Format Description Document](https://nsgreg.nga.mil/doc/view?i=5017)
+1. [Volume 1, Design & Implementation Description Document](https://nsgreg.nga.mil/doc/view?i=5381)
+2. [Volume 2, File Format Description Document](https://nsgreg.nga.mil/doc/view?i=5382)
+3. [Volume 3, Image Projections Description Document](https://nsgreg.nga.mil/doc/view?i=5383)
+4. [Schema](https://nsgreg.nga.mil/doc/view?i=5418)
+
+*Sensor Independent Derived Data (SIDD)* - latest version (3.0; 2021-11-30)
+1. [Volume 1, Design and Implementation Description Document](https://nsgreg.nga.mil/doc/view?i=5440)
+2. [Volume 2, NITF File Format Description Document]( https://nsgreg.nga.mil/doc/view?i=5441)
+3. [Volume 3, GeoTIFF File Format Description Document](https://nsgreg.nga.mil/doc/view?i=5442)
 4. [Schema](https://nsgreg.nga.mil/doc/view?i=5231)
 
-Compensated Phase History Data (CPHD) latest version (1.0.1, 2018-05-21)
-1. [Design & Implementation Description](https://nsgreg.nga.mil/doc/view?i=4638)
-2. [Design & Implementation Schema](https://nsgreg.nga.mil/doc/view?i=4639)
+*Compensated Phase History Data (CPHD)* - latest version (1.1.0; 2021-11-30)
+1. [Design & Implementation Description](https://nsgreg.nga.mil/doc/view?i=5388)
+2. [Design & Implementation Schema](https://nsgreg.nga.mil/doc/view?i=5421)
+
+Both SICD and SIDD files are NITF files following specific guidelines
+*Basic Image Interchange Format (BIFF)* - latest edition (2021.2; 2021-04-20)
+1. [National Imagery Transmission Format](https://nsgreg.nga.mil/doc/view?i=5262)
 
 For other NGA standards inquiries, the standards registry can be searched
- [here](https://nsgreg.nga.mil/registries/search/index.jsp?registryType=doc).
+
+[here](https://nsgreg.nga.mil/registries/search/index.jsp?registryType=doc).
  
 Basic Capability
 ----------------
@@ -95,7 +101,7 @@ or all of these formally stated dependencies. The choices made here are guided b
 practical realities versus what is generally considered best practices.
 
 For all packages on this list, the import is tried (where relevant), and any 
-import errors fr these optional dependencies are caught and handled. In other words, 
+import errors for these optional dependencies are caught and handled. In other words, 
 a missing optional dependency **will not** be presented as import time. Excepting 
 the functionality requiring `h5py`, this import error handling is probably silent. 
 
@@ -147,8 +153,7 @@ Changes to sarpy for the sole purpose of supporting a Python version beyond
 end-of-life are unlikely to be considered.
 
 Information regarding any discovered bugs would be greatly appreciated, so please
-feel free to create a github issue. If more appropriate, **do not hesitate to 
-contact thomas.mccullough.ctr@nga.mil for assistance.**
+feel free to create a GitHub issue. If more appropriate, contact wade.c.schwartzkopf@nga.mil.
 
 Pull Requests
 -------------

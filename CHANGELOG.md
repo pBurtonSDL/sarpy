@@ -1,8 +1,129 @@
 # Change Log
 
-SarPy follows a continuous release process, so there are lots of releases. Since 
-essentially every commit corresponds to a release, specific release points are 
-not being annotated in github.
+SarPy follows a continuous release process, so there are fairly frequent releases. 
+Since essentially every (squash merge) commit corresponds to a release, specific 
+release points are not being annotated in GitHub.
+
+## [1.3.13] - 2022-11-21
+### Fixed
+- Fixed bug in correctly setting attribution for populate_nitf_information_into_sicd().
+### Changed
+- Changed links for SAR standards in the readme file, pointed links to the newest versions.  
+
+## [1.3.12] - 2022-11-15
+### Fixed
+- Fixed accuracy of TimeCOA and DeltaKCOA polygons for ICEYE Spotlight.
+
+## [1.3.11] - 2022-11-08
+### Fixed
+- Fixed bug with conditional testing of NITF image header for jpeg2k files correctly testing and applying format for C8/regular and M8/with masking. 
+### Added
+- Added links to SAR data for Capella, NISAR, and CPHD file formats.
+### Changed
+- Changed links for general NITF, Radarsat-2, and PALSAR files.
+
+## [1.3.10] - 2022-10-24
+### Fixed
+- Updated error message for IQ handing in CPHD reader.
+- Refactored reference to MIL-STD-2500C NITF spec to "Joint BIIF Profile (JBP)".
+- Fixed bug in correctly accounting for row stride from file like object. [Pull Request 348](https://github.com/ngageoint/sarpy/pull/348)
+- Fixed bug with SICD converter correctly conform to described relationship in the SICD D&I.  [Pull Request 349](https://github.com/ngageoint/sarpy/pull/349)
+- Fixed bug with Grid.Col.DeltaKCOA poly correctly populated based on collection metadate 
+and constant COA. [Pull Request 350](https://github.com/ngageoint/sarpy/pull/350)
+- Added remap.py unit test. [Pull Request 351](https://github.com/ngageoint/sarpy/pull/351)
+
+## [1.3.9] - 2022-10-13
+### Fixed
+- Fixed a bug in correctly handling IQ error in CPHD reader.
+- Refactored CHPD schema file name to match official release. 
+
+## [1.3.8] - 2022-10-07
+### Fixed
+Fixed a bug in correctly cleaning up during closing of nitf reader.
+
+## [1.3.7] - 2022-08-29
+### Fixed
+Fixed a bug in correctly handling COSAR version 2 files, for TerraSAR-X.
+
+## [1.3.6] - 2022-08-23
+### Fixed
+Fixed a bug in improper raw writing for a CPHD/CRSD file.
+
+## [1.3.5] - 2022-08-11
+### Fixed
+Fixed a bug in improper checking of whether the signal data for a CPHD/CRSD file 
+was fully written.
+
+## [1.3.4] - 2022-07-01
+### Changed
+- Added SICD version 1.3.0 information, and set the default SICD version number 
+accordingly.
+- Added CPHD version 1.1.0 changes, and set the default CPHD version number 
+accordingly.
+- Set the stage for anticipated CRSD changes.
+- Removed the colon character with an underscore character in a suggested file 
+name, since apparently colon in not permitted in a Windows file name.
+### Fixed
+Using NamedTemporaryFile in unit tests on writing files fails on windows, and 
+usage has been replaced.
+
+## [1.3.3] - 2022-06-20
+### Fixed
+Resolved bug in TerraSAR-X window weighting determination.
+
+## [1.3.2] - 2022-06-09
+### Fixed
+Resolved bug in data segment for reading from remote data source.
+
+## [1.3.1] - 2022-06-08
+### Fixed
+Resolved type-hinting bug for missing optional h5py dependency.
+
+## [1.3.0] - 2022-06-06
+### Changed
+- The base reading and writing structures have been updated to enable reading and 
+writing data in both the natural use format of data (using `read()` or `write()`), 
+as well as the raw storage format (using `read_raw()` or `write_raw()`). 
+- kmz construction has been moved from the `sarpy.io.product` subpackage to the 
+`sarpy.visualization` subpackage.
+- The `sarpy.processing` subpackage has been restructured for clarity of purpose.
+This includes moving sidd production construction has been moved from the 
+`sarpy.io.product` subpackage to the `sarpy.processing.sidd` subpackage.
+
+### Added
+Implementations for DataSegment and FormatFunction for reading and writing 
+changes.
+
+# 1.3
+
+
+## [1.2.70] - 2022-05-05
+### Changed
+Helper functions for determine radar band name have been changed to return the 
+band name of the center frequency versus an aggregate of the band name of the 
+maximum and minimum frequencies.
+
+## [1.2.69] - 2022-04-18
+### Added
+A preliminary version of the "regi" registration method implementation
+
+## [1.2.68] - 2022-04-14
+### Fixed
+CPHD Version 1.0 parsing of GeoInfo Polygon and Line element has been fixed
+
+## [1.2.67] - 2022-04-12
+### Added
+Added support for reading SICD version 1.3, full integration will not be complete 
+until the format is fully finalized and approved
+
+## [1.2.66] - 2022-04-06
+### Fixed
+Improved construction of LinearRing geojson element
+
+## [1.2.65] - 2022-03-25
+### Fixed
+- Resolved minor bug involved with xml namespace handling
+- Corrected layover calculation in AFRL object population
 
 ## [1.2.64] - 2022-03-22
 ### Fixed
@@ -183,7 +304,7 @@ given the presence of other RCS polynomials
 
 ### Fixed
 Account for noise and Radiometric SF poly changes due to subaperture and 
-weighting changes in sarpy.processing.normalize_sicd methods
+weighting changes in sarpy.processing.sicd.normalize_sicd methods
 
 ## [1.2.29] - 2021-10-15
 ### Fixed
@@ -234,7 +355,7 @@ producing a sicd/reader with reweighting and/or subaperture processing applied
 ### Changed
 - Adjustments of unit tests to skip versus fail missing tests for CPD validation. 
 - Refactors some elements of SICD window population to use the 
-sarpy.processing.windows module.
+sarpy.processing.sicd.windows module.
 
 ### Removed
 Drops stated support for Python 2.7
@@ -277,7 +398,7 @@ remains a work-in-progress.*
 
 ## [1.2.15] - 2021-09-08
 ### Added
-Creates sarpy.processing.windows module for more unified handling of commonly used
+Creates sarpy.processing.sicd.windows module for more unified handling of commonly used
 Fourier windowing definitions and functions
 
 ### Fixed
